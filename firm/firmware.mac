@@ -241,7 +241,6 @@ SPROM	= BIT01	; Promiscuous mode
 ;**************************************************
 START:
 	MOV	#RAMTOP, SP	; SP is on the top
-
 ;
 ; Initial settings
 ;
@@ -387,6 +386,7 @@ TXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 ;
 ; Carry is set, NXM error.
 28$:	BISB	#<TXERR!NXMERR>,ERRFLG	; Set error flags
+	BIS	#<NI!XI!XL!RL>,@R3 ; Set NI-bit in the CSR
 ;
 ; Return
 32$:	BIC	#1, @#INDFLG	; Clear indication
@@ -406,69 +406,110 @@ RXP:	BIS	#1, @#INDFLG	; Set indication
 ;	BIC	#1, @#INDFLG	; Clear indication
 ;	RETURN
 ;
-1$:	MOV	@#LQARLL, BDLL	; Get initial Rx BDL low order address bits
+	MOV	@#LQARLL, BDLL	; Get initial Rx BDL low order address bits
 	MOV	@#LQARLH, BDLH	; Get initial Rx BDL high order address bits
+	CLR	DATADR		; Start at the beginning of the RXBUF
+;
+; Calculate number of words
+	MOV	@#ECNTB, R4	; Get number of received bytes
+	BNE	2$		; Not zero - continue
+	BISB	#RXERR, ERRFLG	; Zero - set error flag, ...
+	BIS	#ERXDON,@#ECTST	; ... set "receive-done" bit and ...
+	JMP	RXF$		; ... jump to finish
+2$:	MOV	R4, DATBCN	; Data set size in bytes
+	BIT	#BIT00, R4	; Is it even?
+	BEQ	3$		; Yes - continue
+	INC	R4		; No - make it even
+3$:	ASR	R4		; Convert to word number
+	MOV	R4, DATWCN	; Data set size in words
 ;
 ; Get first/next BDL block data
 RXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 	MOV	BDLH, @#DMAHHA	; Set DMA address (high order bits)
 	CALL	GETBDL		; Get BDL data
-	BCS	10$		; If error - br to error proc.
+	BCS	100$		; If error - br to error proc.
 ;
 ; Process V-bit
 	BIT	#V, 2(R1)	; Check valid bit
 	BNE	1$		; There is V-bit - continue
 	BIS	#RL, @R3	; Set RL-bit in the CSR
-	BR	12$		; There is no V-bit - return
+	BR	RXF$		; There is no V-bit - return
 ;
 ; Calculate word count
-1$:	MOV	@#ECNTB, R4	; Get number of received bytes
-	BNE	2$		; Not zero - continue
-	BISB	#RXERR, ERRFLG	; Zero - set error flag and ...
-	BR	4$		; ... skip DMA data transfer
-2$:	MOV	R4, BCOUNT	; Store for the futher use
-	BIT	#BIT00, R4	; Is it even?
-	BEQ	3$		; Yes - continue
-	INC	R4		; No - make it even
-3$:	NEG	R4		; 2-s compl. and ...
-	ASR	R4		; ... convert to number of words
-	MOV	R4, @#DMACNT	; Store result for the DMA operation
+1$:	MOV	DATWCN, R4	; Data size in words to R4
+	BNE	3$		; If data size = 0 then ...
+	BIS	#RL, @R3	; ... set RL-bit in the CSR ...
+	BR	RXF$		; ... and return
+;
+3$:	ADD	WCOUNT, R4	; Compare size of received data and ...
+				; ... DMA data buffer size
+	MOV	R4, DATWCN	; Store size of the reminder for the futher loop(s)
+	BLT	6$		; Size of received data is smaller
+;
+; Size of received data is greater then (or equal to) DMA data buffer size
+	MOV	WCOUNT, R5	; In this case we operate with ...
+	MOV	R5, @#DMACNT	; ... DMA data buffer size
+; Calc. number of bytes
+	TST	R4		; Zero
+	BNE	4$
+	MOV	DATBCN, BCOUNT
+	BR	7$
+4$:	ASL	R5		; Convert to byte count 2's compl.
+	ADD	R5, DATBCN	; Correct remaining byte count
+	NEG	R5		; 2's complement
+	MOV	R5, BCOUNT	; Number of bytes in the DMA data block
+	BR	7$		; Br to DMA operation
+;
+; Size of received data is less then DMA data buffer size
+6$:	MOV	R4, @#DMACNT	;
+	MOV	DATBCN, BCOUNT	;
+;	BR	7$
 ;
 ; DMA transfer
-	MOV	#RXBUF,@#DMALAD	; Initial local address to DMA reg
+7$:	MOV	#RXBUF, R5	; Calculate offset of the
+	ADD	DATADR, R5	; data address in the RXBUF
+	MOV	R5, @#DMALAD	; Initial local address to DMA reg
 	BIS	#RXBUFS,@R2	; Select receive buffer
 	CALL	DMASRD		; Start DMA operation
 	BIC	#RXBUFS,@R2	; Deselect receive buffer
-	BCS	10$		; Got error - br to finish
-4$:	BIS	#ERXDON,@#ECTST	; Else - set "receive-done" bit
+	BCS	100$		; Got error - br to finish
+	MOV	WCOUNT, R5	; Data size in words has been transfered
+	MOV	R5, R4		; without error (2's complement)
+	NEG	R5		; Convert to normal value and ...
+	ADD	R5, DATADR	; ... calculate data address offset
 ;
 ; Prepare and send status words
-	CLR	R5		;
+	TST	DATWCN		; Is this the last data set?
+	BLE	9$
+	MOV	#140000, R4	; Set "valid" and not "last" data set
+	BR	11$		; Skip "receive-done" bit operation
+9$:	BIS	#ERXDON,@#ECTST	; Set "receive-done" bit
 	CLR	R4		;
+11$:	CLR	R5		;
 	MOV	@#ECTST, R0	; Get status byte
 ; Check errors
 	BIT	#<ERCRER!ERXERR>,R0 ; Did we get errors?
-	BEQ	6$		; No - continue
+	BEQ	15$		; No - continue
 	BIS	#BIT14, R5	; Yes - set error bit
 	BIT	#ERCRER, R0	; Did we get CRC error?
-	BEQ	5$		; No - continue
+	BEQ	13$		; No - continue
 	BIS	#BIT01, R5	; Yes - set error bit
-5$:	BIS	R5, R4		; Save to 1-st status word
+13$:	BIS	R5, R4		; Save to 1-st status word
 ; Calculate number of bytes, store status words
-6$:	MOV	BCOUNT, R5	; Get number of received bytes
+15$:	MOV	BCOUNT, R5	; Get number of received bytes
 	BIT	#<ESPL!EINEXL!EINL>,R0 ; Loop-packet?
-	BNE	7$		; Yes - br to continue
+	BNE	17$		; Yes - br to continue
 	SUB	#60., R5	; No -  calc modified number of bytes
-	BR	8$
-7$:	BIS	#BIT13, R4	; Set loop-packet bit
-8$:	MOVB	R5, R2STW	; Save byte count value
+	BR	19$
+17$:	BIS	#BIT13, R4	; Set loop-packet bit
+19$:	MOVB	R5, R2STW	; Save byte count value
 	MOVB	R5, R2STW+1	;
 	BIC	#^C<BIT10!BIT09!BIT08>,R5 ; Clear all except high bits
 	BIS	R5, R4		; Set the bits to the 1-st word
 	MOV	R4, R1STW	; Store 1-st status word
 	MOV	#R1STW, R0
 	CALL	STWPR		; Send status words to host
-	BCS	10$		; Carry is set - NXM error
+	BCS	100$		; Carry is set - NXM error
 	BIS	#RI, @R3	; Set RI bit in the CSR
 ;
 ; Calculate next BDL address
@@ -477,10 +518,11 @@ RXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 	BR	RXL$		; ... and loop
 ;
 ; Carry is set NXM error
-10$:	BISB	#<RXERR!NXMERR>,ERRFLG	; Set error flags
+100$:	BISB	#<RXERR!NXMERR>,ERRFLG	; Set error flags
+	BIS	#<NI!RI!XL!RL>,@R3 ; Set NI-bit in the CSR
 ;
 ; Return
-12$:	BIC	#1, @#INDFLG	; Clear indication
+RXF$:	BIC	#1, @#INDFLG	; Clear indication
 	RETURN
 ;
 ;***********************************************
@@ -537,12 +579,11 @@ DMASWR:
 DMAC$:	CLC			; Clear carry
 1$:	BIT	#DMARDY,@R2	; Ready?
 	BEQ	1$		; Not yet - loop
-	BIC	#<DMARDO!DMAWRO>,@R2 ; Clear operation bits
 	BIT	#DMANXM,@R2	; NXM error?
 	BEQ	2$		; No - normal exit
-	BIS	#NI, @R3	; Else, set NI-bit in the CSR, ...
 	SEC			; Yes - set carry
-2$:	RETURN
+2$:	BIC	#<DMARDO!DMAWRO>,@R2 ; Clear operation bits
+	RETURN
 ;
 ;********************************************
 ;* Status words processing
@@ -561,6 +602,13 @@ STWPR:	MOV	(R0)+, 10(R1)	; First status word
 	MOV	#-2, @#DMACNT	; Process 2 words
 	CALL	DMASRD		; Start DMA read operation
 	RETURN
+;
+;********************************************
+;* NXM error
+;********************************************
+;NXMERR:
+;	BIS	#<NI!XI!XL!RL>,@R3 ; Set NI-bit in the CSR
+;	RETURN
 ;
 ;********************************************
 ;* Setup packet processing (rewrite mac address table)
@@ -792,8 +840,11 @@ TMRIRQ:
 ;==================================================
 MTADR:	.BLKW	1	; Address of the MACTAB entry
 MACTAB:	.BLKB	84.	; Mac address table
-BCOUNT:	.BLKW	1
-WCOUNT:	.BLKW	1	; 2's compl.
+DATADR:	.BLKW	1	; Data address offset
+DATWCN:	.BLKW	1	; Current data size in words
+DATBCN:	.BLKW	1	; Current data size in bytes
+BCOUNT:	.BLKW	1	; Total data size in bytes
+WCOUNT:	.BLKW	1	; DMA ops. data size (2's compl.)
 BDLH:	.BLKW	1
 BDLL:	.BLKW	1
 T1STW:	.BLKW	1
