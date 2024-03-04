@@ -26,10 +26,10 @@ module bdl(
 );
 
 // Сигналы упраления обменом с шиной
-wire			bus_strobe, bus_read_req, bus_write_req;
-assign bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o;	// строб цикла шины
-assign bus_read_req = bus_strobe & ~wb_we_i;				// запрос чтения
-assign bus_write_req = bus_strobe & wb_we_i;				// запрос записи
+//wire			bus_strobe, bus_read_req, bus_write_req;
+//assign bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o;	// строб цикла шины
+//assign bus_read_req = bus_strobe & ~wb_we_i;				// запрос чтения
+//assign bus_write_req = bus_strobe & wb_we_i;				// запрос записи
 
 reg			ack;
 always @(posedge wb_clk_i)
