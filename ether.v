@@ -12,7 +12,7 @@ module ether(
 	output [10:0]	rxcntb_o,	// Счетчик данных приема (байт)
 	output			erxwrn_o,	// Сигнал записи
 	output			rxclkb_o,	// Синхросигнал канала приема (запись в буферную память)
-	output [7:0]	sts_errs_o,	// статус и ошибки приема/передачи
+	output [6:0]	sts_errs_o,	// статус и ошибки приема/передачи
 //	input  [47:0]	macbus,		// MAC адрес
 //
 	input				e_rxc,		// Синхросигнал канала приема
@@ -61,7 +61,7 @@ wire			rxrdy;		// Данные приняты
 wire			txdone;		// Передача завершена 
 assign crs_err = (e_rxer & (~e_rxdv))? 1'b1 : 1'b0;
 assign rx_errg = loop? rx_err : (rx_err | ~md_status[0] | ~md_status[1]);
-assign sts_errs_o = {rxrdy, txdone, 1'b0, crs_err, mdc_err, tx_errg, rx_errg, rx_crc_err};
+assign sts_errs_o = {rxrdy, txdone, crs_err, mdc_err, tx_errg, rx_errg, rx_crc_err};
 
 //================ Синхронизация ====================//
 wire			loop;				// Combined loop
