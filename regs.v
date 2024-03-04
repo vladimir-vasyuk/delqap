@@ -34,7 +34,7 @@ module extregs(
 	input				let_stb_i,	//
 //	output			let_ack_o,	//
 	output [9:0]	e_mode_o,	// 
-	input  [7:0]	e_stse_i,	//
+	input  [6:0]	e_stse_i,	//
 	output [10:0]	e_txcntb_o,	//
 	input	 [10:0]	e_rxcntb_i,	//
 	output [15:0]	e_mdval_o,	//
@@ -231,8 +231,8 @@ bus_int inter(
 //************************************************
 // Режимы работы модуля Ethernet
 //************************************************
-reg			txrdy;		// Данные для передачи готовы
-reg			rxdon;		// Данные получены
+reg			rxdon;		// Данные приняты
+reg			txrdy;		// Данные готовы к передаче
 reg			stpac;		// Установочный пакет (setup)
 reg			skipb;		// Пропуск байта
 reg			mcast;		// Режим широковещания
@@ -241,15 +241,17 @@ wire        intmode;		// Internal loopback
 wire        intextmode;	// Internal extended loopback
 wire        extmode;		// External loopback
 wire        rxmode;		// Разрешение приема пакета
+wire			bdrom;		// Загрузка BDROM
 assign intmode = (~csr_il) & (~csr_el) & (~csr_re);
-assign intextmode = (~csr_il) & csr_el & (~csr_re);
+assign intextmode = (~csr_il) & csr_el & (~csr_re) & (~csr_bd);
 assign extmode = csr_il & csr_el & (~csr_re);
 assign rxmode = csr_re & (~csr_rl);
+assign bdrom = (~csr_il) & csr_el & (~csr_re) & csr_bd;
 
 wire [7:0]	e_mode;			// Регистр режима работы 				-- 24040
 assign e_mode = {rxdon, txrdy, skipb, stpac, extmode, intextmode, intmode, rxmode};
 // wire [7:0]	e_sts_errs;	// статус и ошибки приема/передачи	-- 24040
-// {rxrdy, txdone, 0, crs_err, mdc_err, e_txer, rx_err, rx_crc_err}
+// {1'b0, rxrdy, txdone, crs_err, mdc_err, e_txer, rx_err, rx_crc_err}
 reg  [10:0]	e_txcntb;		// Регистры кол-ва байт 				-- 24042 (прием/передача)
 //wire [10:0]	e_rxcntb;	// Регистр кол-ва принятых байт		-- 24042
 reg  [15:0]	e_mdval;			// входные/выходные данные MD 		-- 24044
@@ -268,19 +270,22 @@ reg			e_mdmux = 1'b0;// мультиплексер данных MD
 //		1:		1-приемник готов; 0-приемник не готов
 //		0:		1-связь есть; 0-связи нет
 
-wire			eth_mode_tx, eth_mode_rx, lp;
+//wire			eth_mode_tx, eth_mode_rx;
 assign e_txcntb_o = e_txcntb;
 assign e_mode_o = {promis, mcast, e_mode[7:0]};
 assign e_mdval_o = e_mdval;
 assign e_mdctrl_o = e_mdctrl;
-assign eth_rxmd_o = (stpac | extmode | intextmode | intmode | rxmode) & emode_ena[1];
-assign eth_txmd_o = txrdy & emode_ena[0];
-assign lp = intextmode | extmode | stpac;
+//assign eth_rxmd_o = (stpac | extmode | intextmode | intmode | rxmode) & emode_ena[1];
+//assign eth_txmd_o = txrdy & emode_ena[0];
+assign eth_rxmd_o = (stpac | extmode | intextmode | intmode | rxmode) & buf_mod[1];
+assign eth_txmd_o = txrdy & buf_mod[0];
 
 //************************************************
 // Дополнительные регистры
 // 24050 - костыль получения доступа к буферной памяти (отключение от адресной шины Ethernet
-reg  [1:0]	emode_ena;
+reg  [1:0]	buf_mod;
+// {rx_ena, tx_ena}
+
 // 24054 - setup control byte (sanity timer, promis, mcast)
 //reg  [2:0]	santm_cnt;		// значение sanity
 reg			santm_res;			// генерация BDCOK
@@ -326,7 +331,7 @@ always @(posedge lwb_clk_i) begin
 					if (sa_rom_chk)
 						edat <= {8'hFF, macval[63:56]};
 					else
-						edat <= e_mdmux? {8'h00, e_stse_i[7:0]} : {8'hFF, macval[15:8]};
+						edat <= e_mdmux? {9'h00, e_stse_i[6:0]} : {8'hFF, macval[15:8]};
 				end
 				3'b010: begin	// Base + 04
 					edat <= {8'hFF, macval[23:16]};
@@ -380,11 +385,7 @@ always @(posedge lwb_clk_i) begin
 							end
 							csr_re <= ewb_dat_i[0];
 							// Только для PDP-11. Для алгоритма смотри доку
-							if((csr_bd == 1'b1) & (ewb_dat_i[3] == 1'b0)) begin
-//								csr_bd <= wb_dat_i[3]; funcreg <= f_bdr;
-							end
-							else
-								csr_bd <= ewb_dat_i[3];
+							csr_bd <= ewb_dat_i[3];
 						end
 						csr_sr <= ewb_dat_i[1];  // 1 - 0 => программный сброс
 					end
@@ -500,7 +501,7 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 	else if (lerd_req == 1'b1) begin
 		case (lwb_adr_i[2:0])
 			3'b000:	// 24040
-				etdat <= {e_stse_i[7:0], e_mode[7:0]};
+				etdat <= {1'b0 , e_stse_i[6:0], e_mode[7:0]};
 			3'b001:	// 24042
 				etdat <= {5'b0, e_rxcntb_i[10:0]};
 			3'b010:	// 24044
@@ -508,32 +509,34 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 			3'b011:	// 24046
 				etdat <= {e_mdstat_i[7:0], 1'b0, e_mdctrl[6:0]};
 			3'b100:	// 24050
-				etdat <= {14'b0, emode_ena[1:0]};
+				etdat <= {bdrom, 13'b0, buf_mod[1:0]};
 			3'b110:	// 24054
 				etdat <= {14'b0, promis, mcast};
+			3'b111:	// 24056
+				etdat <= {13'b0, devind[2:0]};
 		endcase
 	end
 	// Запись регистров
 	else if (lewr_req == 1'b1) begin
 		if (lwb_sel_i[0] == 1'b1) begin   // Запись младшего байта
 			case (lwb_adr_i[2:0])
-				3'b000:	// 24040
+				3'b000:			// 24040
 					{rxdon, txrdy, skipb, stpac} <= lwb_dat_i[7:4];
-				3'b001:	// 24042
+				3'b001:			// 24042
 					e_txcntb[7:0] <= lwb_dat_i[7:0];
-				3'b010:	// 24044
+				3'b010:			// 24044
 					e_mdval[7:0] <= lwb_dat_i[7:0];
-				3'b011:	// 24046
+				3'b011:			// 24046
 					e_mdctrl[6:0] <= lwb_dat_i[6:0];
-				3'b100:	// 24050
-					emode_ena[1:0] <= lwb_dat_i[1:0];
+				3'b100: 			// 24050
+					buf_mod[1:0] <= lwb_dat_i[1:0];
 				3'b110: begin	// 24054
 					santm_res <= lwb_dat_i[7];
 //					santm_cnt[2:0] <= lwb_dat_i[6:4];
 					promis <= lwb_dat_i[1];
 					mcast <= lwb_dat_i[0];
 				end
-				3'b111:	// 24056
+				3'b111:			// 24056
 					devind[2:0] <= lwb_dat_i[2:0];
 			endcase
 		end
@@ -547,7 +550,7 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 		end
 	end
 	else begin
-		if(~e_stse_i[7] & rxdon)
+		if(~e_stse_i[6] & rxdon)
 			rxdon <= 1'b0;
 	end
 end
