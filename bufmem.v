@@ -39,7 +39,6 @@ module firmrom(
 );
 
 // Формирование сигнала подтверждения выбора устройства
-/*
 reg  [1:0] ack;
 always @(posedge wb_clk_i)
 begin
@@ -47,7 +46,7 @@ begin
    ack[1] <= wb_cyc_i & ack[0];
 end
 assign wb_ack_o = wb_cyc_i & wb_stb_i & ack[1];
-*/
+/*
 reg ack;
 always @(posedge wb_clk_i)
    if (wb_stb_i & wb_cyc_i)
@@ -55,8 +54,7 @@ always @(posedge wb_clk_i)
    else
 		ack <= 1'b0;
 assign wb_ack_o = ack & wb_stb_i;
-
-
+*/
 // Блок ПЗУ
 rom bdrom(
    .address(wb_adr_i[11:1]),
@@ -269,18 +267,21 @@ assign enaprg = prg_stb_i? (wb_we_i ? wb_sel_i : 2'b11) : 2'b00;
 wire [15:0]	prgdat, romdat;
 assign wb_dat_o = rom_stb_i? romdat : prgdat;
 
-reg prgack, romack;
+reg prgack;
+reg [1:0] romack;
 always @(posedge wb_clk_i) begin
    if (prg_stb_i & wb_cyc_i)
 		prgack <= 1'b1;
    else
 		prgack <= 1'b0;
-   if (rom_stb_i & wb_cyc_i)
-		romack <= 1'b1;
+   if (rom_stb_i & wb_cyc_i) begin
+		romack[0] <= rom_stb_i;
+		romack[1] <= romack[0];
+	end
    else
-		romack <= 1'b0;
+		romack <= 2'b0;
 end	
-assign wb_ack_o = (romack & rom_stb_i) | (prgack & prg_stb_i);
+assign wb_ack_o = (romack[1] & rom_stb_i) | (prgack & prg_stb_i);
 
 firmw ram(
    .address(wb_adr_i[11:1]),
