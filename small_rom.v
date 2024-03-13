@@ -1,5 +1,10 @@
+//=================================================================================
+// Реализация контроллера Ethernet на основе приемо-передатчика RTL8211EG
+//---------------------------------------------------------------------------------
+// Модуль MAC адреса
+//=================================================================================
 module small_rom
-#(parameter ADDR_WIDTH = 3, parameter WIDTH = 8, parameter FILE = "sarom.txt")
+#(parameter ADDR_WIDTH = 3, parameter WIDTH = 8, parameter FILE = "../../hdl/delqap/sarom.txt")
 (
    input                      clk,
 // input [ADDR_WIDTH - 1:0]   addr,
