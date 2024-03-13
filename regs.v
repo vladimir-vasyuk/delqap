@@ -1,5 +1,8 @@
 //=================================================================================
-// Модуль внешних регистров и регистров Ethernet. Доступ к внешним регистрам и с обеих шин
+// Реализация контроллера Ethernet DELQA на основе процессора М4 (LSI-11M)
+//=================================================================================
+// Модуль внешних регистров и регистров Ethernet.
+// Доступ к внешним регистрам с обеих шин
 // Доступ к регистрам Ethernet только с внутренней
 //=================================================================================
 module extregs(
@@ -31,18 +34,17 @@ module extregs(
 	input				s3_i,			// сигнал s3
 	input				s4_i,			// сигнал s4
 // Ethernet
-	input				let_stb_i,	//
-//	output			let_ack_o,	//
-	output [9:0]	e_mode_o,	// 
-	input  [6:0]	e_stse_i,	//
-	output [10:0]	e_txcntb_o,	//
-	input	 [10:0]	e_rxcntb_i,	//
-	output [15:0]	e_mdval_o,	//
-	input  [15:0]	e_mdval_i,	//
-	output [6:0]	e_mdctrl_o,	//
-	input  [7:0]	e_mdstat_i,	//
-	output			eth_txmd_o,	//
-	output			eth_rxmd_o,	//
+	input				let_stb_i,	// строб выбора регистров ethernet
+	output [9:0]	e_mode_o,	// управляющие сигналы для модуля ethernet
+	input  [6:0]	e_stse_i,	// состояние модуля ethernet
+	output [10:0]	e_txcntb_o,	// кол-во байт каналы передачи
+	input	 [10:0]	e_rxcntb_i,	// кол-во байт каналы приема
+	output [15:0]	e_mdval_o,	// данные для блока MDC
+	input  [15:0]	e_mdval_i,	// данные из блока MDC
+	output [6:0]	e_mdctrl_o,	// управляющие сигналы для блока MDC
+	input  [7:0]	e_mdstat_i,	// состояние блока MDC
+	output			eth_txmd_o,	// сигнал мультиплексера адреса ethernet буфера передачи
+	output			eth_rxmd_o,	// сигнал мультиплексера адреса ethernet буфера приема
 // Sanity timer
 	output [1:0]	santm_o,
 // Indication
@@ -146,7 +148,6 @@ reg			csr_re = 1'b0;		// 00	Receiver Enable (RW)
 wire [15:0] csr;
 assign csr_ca = (~csr_il)? 1'b0 : 1'b1;//(~errs[4]);
 assign csr = {csr_ri,1'b0,1'b0,1'b1,1'b0,csr_se,csr_el,csr_il,csr_xi,csr_ie,csr_rl,csr_xl,csr_bd,csr_ni,csr_sr,csr_re};
-//assign santmena_o = csr_se;
 
 //************************************************
 // Регистр адреса ветора - var - 174454
@@ -162,7 +163,6 @@ reg  [7:0]	var_iv;				// Interrupt vector
 reg			var_id = 1'b0;		// Identity test bit
 reg			blkreg = 1'b0;
 wire [15:0]	vareg;
-//assign vareg = {var_ms,var_os,var_rs,var_s3,var_s2,var_s1,var_iv,1'b0,var_id};
 assign vareg = {var_ms,s4_i,var_rs,var_s3,var_s2,var_s1,var_iv,1'b0,var_id};
 
 //************************************************
@@ -270,29 +270,21 @@ reg			e_mdmux = 1'b0;// мультиплексер данных MD
 //		1:		1-приемник готов; 0-приемник не готов
 //		0:		1-связь есть; 0-связи нет
 
-//wire			eth_mode_tx, eth_mode_rx;
+// 24050 - регистр общего назначения
+// чтение - (bdrom, 8'b0,  promis, mcast, eadr_mod[1:0], leds[2:0])
+// запись - (8'b0, santm_res, promis, mcast, eadr_mod[1:0], leds[2:0])
+reg			santm_res;			// генерация BDCOK
+reg  [1:0]	eadr_mod;			// подключение к адресной шине ethernet
+reg  [2:0]	leds;					// индикация
+
+assign santm_o = {csr_se, santm_res};
+assign dev_ind_o = leds;
 assign e_txcntb_o = e_txcntb;
 assign e_mode_o = {promis, mcast, e_mode[7:0]};
 assign e_mdval_o = e_mdval;
 assign e_mdctrl_o = e_mdctrl;
-//assign eth_rxmd_o = (stpac | extmode | intextmode | intmode | rxmode) & emode_ena[1];
-//assign eth_txmd_o = txrdy & emode_ena[0];
-assign eth_rxmd_o = (stpac | extmode | intextmode | intmode | rxmode) & buf_mod[1];
-assign eth_txmd_o = txrdy & buf_mod[0];
-
-//************************************************
-// Дополнительные регистры
-// 24050 - костыль получения доступа к буферной памяти (отключение от адресной шины Ethernet
-reg  [1:0]	buf_mod;
-// {rx_ena, tx_ena}
-
-// 24054 - setup control byte (sanity timer, promis, mcast)
-//reg  [2:0]	santm_cnt;		// значение sanity
-reg			santm_res;			// генерация BDCOK
-assign santm_o = {csr_se, santm_res};
-// 24056 -- регистры индикации
-reg  [2:0]	devind;			// регистры индикации
-assign dev_ind_o = devind;
+assign eth_rxmd_o = (stpac | extmode | intextmode | intmode | rxmode) & eadr_mod[1];
+assign eth_txmd_o = txrdy & eadr_mod[0];
 
 
 //************************************************
@@ -490,13 +482,13 @@ always @(posedge lwb_clk_i) begin
 	end
 end
 
+//************************************************
+// Работа с регистрами ethernet
+//
 always @(posedge lwb_clk_i, posedge comb_res) begin
    if(comb_res) begin 
 		// Сброс регистров MD
 		e_mdctrl <= 7'b0;
-//		emode_ena <= 2'b11;
-//		promis <= 1'b0; mcast <= 1'b0;
-//		santm_cnt <= 3'b0;
 	end
 	else if (lerd_req == 1'b1) begin
 		case (lwb_adr_i[2:0])
@@ -509,11 +501,9 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 			3'b011:	// 24046
 				etdat <= {e_mdstat_i[7:0], 1'b0, e_mdctrl[6:0]};
 			3'b100:	// 24050
-				etdat <= {bdrom, 13'b0, buf_mod[1:0]};
-			3'b110:	// 24054
-				etdat <= {14'b0, promis, mcast};
-			3'b111:	// 24056
-				etdat <= {13'b0, devind[2:0]};
+				etdat <= {bdrom, 8'b0, promis, mcast, eadr_mod[1:0], leds[2:0]};
+//			3'b110:	// 24054
+//			3'b111:	// 24056
 		endcase
 	end
 	// Запись регистров
@@ -528,16 +518,17 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 					e_mdval[7:0] <= lwb_dat_i[7:0];
 				3'b011:			// 24046
 					e_mdctrl[6:0] <= lwb_dat_i[6:0];
-				3'b100: 			// 24050
-					buf_mod[1:0] <= lwb_dat_i[1:0];
-				3'b110: begin	// 24054
+				3'b100: begin	// 24050
 					santm_res <= lwb_dat_i[7];
-//					santm_cnt[2:0] <= lwb_dat_i[6:4];
-					promis <= lwb_dat_i[1];
-					mcast <= lwb_dat_i[0];
+					promis <= lwb_dat_i[6];
+					mcast <= lwb_dat_i[5];
+					eadr_mod[1:0] <= lwb_dat_i[4:3];
+					leds[2:0] <= lwb_dat_i[2:0];
 				end
-				3'b111:			// 24056
-					devind[2:0] <= lwb_dat_i[2:0];
+//				3'b110: begin	// 24054
+//				end
+//				3'b111: begin	// 24056
+//				end
 			endcase
 		end
 		if(lwb_sel_i[1] == 1'b1) begin    // Запись старшего байта
