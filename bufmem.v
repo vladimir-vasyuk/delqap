@@ -93,13 +93,12 @@ wire bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o;	// строб цикла ши
 wire bus_we = bus_strobe & wb_we_i;						// запрос записи
 
 // Формирование сигнала подтверждения выбора устройства
-reg ack;
-always @(posedge wb_clk_i)
-   if (wb_stb_i & wb_cyc_i)
-		ack <= 1'b1;
-   else
-		ack <= 1'b0;
-assign wb_ack_o = ack & wb_stb_i;
+reg  [1:0] ack;
+always @(posedge wb_clk_i) begin
+   ack[0] <= wb_cyc_i & wb_stb_i;
+   ack[1] <= wb_cyc_i & ack[0];
+end
+assign wb_ack_o = wb_cyc_i & wb_stb_i & ack[1];
 
 wire [15:0]	dat_o;	// выходные данные
 assign wb_dat_o = dat_o;
@@ -181,6 +180,7 @@ wire bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o;	// строб цикла ши
 wire bus_we = bus_strobe & wb_we_i;						// запрос записи
 
 // Формирование сигнала подтверждения выбора устройства
+/*
 reg ack;
 always @(posedge wb_clk_i)
    if (wb_stb_i & wb_cyc_i)
@@ -188,6 +188,13 @@ always @(posedge wb_clk_i)
    else
 		ack <= 1'b0;
 assign wb_ack_o = ack & wb_stb_i;
+*/
+reg  [1:0] ack;
+always @(posedge wb_clk_i) begin
+   ack[0] <= wb_cyc_i & wb_stb_i;
+   ack[1] <= wb_cyc_i & ack[0];
+end
+assign wb_ack_o = wb_cyc_i & wb_stb_i & ack[1];
 
 wire [15:0]	dat_o;	// выходные данные
 wire			dma_we;
