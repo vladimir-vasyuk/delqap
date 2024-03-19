@@ -1,12 +1,14 @@
 	.TITLE	DELQA - DELQA logic
 	.IDENT	/x01.00/
 
-	.NLIST	ME
-	.NLIST	MEX
-	.NLIST	BEX
-;==========================================================================================
-;
-;==========================================================================================
+	.NLIST	BIN
+;	.NLIST	ME
+;	.NLIST	MEX
+;	.NLIST	BEX
+
+	.SBTTL	Definitions
+	 .SBTTL	 Memory map and registers
+;===========================================================================
 ; Memory addresses
 ;---------------------------------------------------------------------------
 ; External bus access
@@ -16,7 +18,7 @@
 ; 174444 - TBDL
 ; 174440 - Base address
 ;
-; No external bus access
+; Internal bus access
 ; 160000 - 167777 ROM
 ; 024000 - 024012 BDL block
 ; 024020 - 024036 DMA registers
@@ -28,7 +30,7 @@
 ;---------------------------------------------------------------------------
 ; Register definitions
 ;---------------------------------------------------------------------------
-; External registers access
+; External registers
 ;
 LQABAS	= 24100	    ; Base address
 LQARLL	= LQABAS+4  ; Rx BD low ordera ddress bis
@@ -38,15 +40,15 @@ LQATLH	= LQABAS+12 ; Tx BDL high order address bits
 LQAVAR	= LQABAS+14 ; Vector Address Register
 LQACSR	= LQABAS+16 ; Control and Status Register
 ;
-; No external bus access
+; Internal register
 ;
 RAMTOP	= 010000    ; Upper program limit
 ;
 ;---Buffers----
 RXBUF	= 10000	    ; Receive buffer address
-RXBSIZ	= 10000	    ; Size of buffer
+RXBSIZ	= 4000	    ; Size of buffer (words)
 TXBUF	= 20000	    ; Transmit buffer address
-TXBSIZ	= 4000	    ; Size of buffer
+TXBSIZ	= 2000	    ; Size of buffer (words)
 ;
 ;----BD ROM----
 BDROM	= 160000    ; BD ROM address
@@ -92,127 +94,143 @@ EGMOD	= 24050
 ; read  - {bdmode, 8'b0, promis, mcast, rxa_eth, txa_eth, led, led, led}
 ; write - {8'b0, santm_reset, promis, mcast, rxa_eth, txa_eth, led, led, led}
 ;
+	 .SBTTL	 Bit definitions
+;===========================================================================
+; General bit definitions
 ;---------------------------------------------------------------------------
-; Bit definitions
+BT.15	= 100000
+BT.14	= 040000
+BT.13	= 020000
+BT.12	= 010000
+BT.11	= 004000
+BT.10	= 002000
+BT.09	= 001000
+BT.08	= 000400
+BT.07	= 000200
+BT.06	= 000100
+BT.05	= 000040
+BT.04	= 000020
+BT.03	= 000010
+BT.02	= 000004
+BT.01	= 000002
+BT.00	= 000001
 ;---------------------------------------------------------------------------
-BIT15	= 100000
-BIT14	= 040000
-BIT13	= 020000
-BIT12	= 010000
-BIT11	= 004000
-BIT10	= 002000
-BIT09	= 001000
-BIT08	= 000400
-BIT07	= 000200
-BIT06	= 000100
-BIT05	= 000040
-BIT04	= 000020
-BIT03	= 000010
-BIT02	= 000004
-BIT01	= 000002
-BIT00	= 000001
-;
 ;  CSR bit definitions
-CS.RI	= BIT15 ; Receive interrupt request
-CS.SE	= BIT10 ; Sanity timer
-CS.EL	= BIT09 ; External loopback
-CS.IL	= BIT08 ; Internal loopback
-CS.XI	= BIT07 ; Transmit interrupt request
-CS.IE	= BIT06 ; Interrupt enable
-CS.RL	= BIT05 ; Receive List Invalid/Empty
-CS.XL	= BIT04 ; Transmit List Invalid/Empty
-CS.BD	= BIT03 ; Boot/Diagnostic ROM load
-CS.NI	= BIT02 ; Nonexistance-memory timeout Interrupt
-CS.SR	= BIT01 ; Software reset
-CS.RE	= BIT00 ; Receiver enable
-;
+CS.RI	= BT.15	; Receive interrupt request
+CS.SE	= BT.10	; Sanity timer
+CS.EL	= BT.09	; External loopback
+CS.IL	= BT.08	; Internal loopback
+CS.XI	= BT.07	; Transmit interrupt request
+CS.IE	= BT.06	; Interrupt enable
+CS.RL	= BT.05	; Receive List Invalid/Empty
+CS.XL	= BT.04	; Transmit List Invalid/Empty
+CS.BD	= BT.03	; Boot/Diagnostic ROM load
+CS.NI	= BT.02	; Nonexistance-memory timeout Interrupt
+CS.SR	= BT.01	; Software reset
+CS.RE	= BT.00	; Receiver enable
+;---------------------------------------------------------------------------
 ; VAR bit definitions
-VR.MS	= BIT15 ; Mode select
-VR.OS	= BIT14 ; Options switch
-VR.RS	= BIT13 ; Request to execute self-test
-VR.S3	= BIT12 ;
-VR.S2	= BIT11 ; Self-test status
-VR.S1	= BIT10 ;
-VR.ID	= BIT00 ; Identity test bit
-;
+VR.MS	= BT.15	; Mode select
+VR.OS	= BT.14	; Options switch
+VR.RS	= BT.13	; Request to execute self-test
+VR.S3	= BT.12	;
+VR.S2	= BT.11	; Self-test status
+VR.S1	= BT.10	;
+VR.ID	= BT.00 ; Identity test bit
+;---------------------------------------------------------------------------
 ; Address descriptor bits
 BDES	= 2
-AD.H	= BIT06 ; High byte (beginning)
-AD.L	= BIT07 ; Low byte (termination)
-AD.S	= BIT12 ; Setup package indication
-AD.E	= BIT13 ; End of message
-AD.C	= BIT14 ; Chain address bit
-AD.V	= BIT15 ; Valid bit
+AD.H	= BT.06	; High byte (beginning)
+AD.L	= BT.07	; Low byte (termination)
+AD.S	= BT.12	; Setup package indication
+AD.E	= BT.13	; End of message
+AD.C	= BT.14	; Chain address bit
+AD.V	= BT.15	; Valid bit
 INVLD	= 0
-;
+;---------------------------------------------------------------------------
 ; Twos complement of buffer size in words.
 BSIZ	= 6
 ;
 ; Used and not last data segment
 UNLST	= 140000
-;
+;---------------------------------------------------------------------------
 ; Bits defined for Transmit status word #1
-TS.1GE	= BIT14		; indicates an error
-TS.1CE	= BIT12		; indicates loss of carrier
-TS.1ES	= BIT10		; indicates that the sanity timer was ...
-			; ... enabled via switch S4 at powerup
-TS.1AE	= BIT09		; indicates that the transmission was ...
-			; ... aborted due to excessive collisions
+TS.1GE	= BT.14	; indicates an error
+TS.1CE	= BT.12	; indicates loss of carrier
+TS.1ES	= BT.10	; indicates that the sanity timer was ...
+		; ... enabled via switch S4 at powerup
+TS.1AE	= BT.09	; indicates that the transmission was ...
+		; ... aborted due to excessive collisions
 ;
 ; Bits defined for Receive status word #1
-RS.1GE	= BIT14		; indicates an error
-RS.1ES	= BIT13		; indicates a looped back Setup or ...
-			; ... External Loopback packet
-RS.1RE	= BIT11		; indicates that the internal loopback ...
-			; ... operation was unsuccessful
-RS.1BL	= BIT08!BIT09!BIT10 ; high order 3 bits of ...
+RS.1GE	= BT.14	; indicates an error
+RS.1ES	= BT.13	; indicates a looped back Setup or ...
+		; ... External Loopback packet
+RS.1RE	= BT.11	; indicates that the internal loopback ...
+		; ... operation was unsuccessful
+RS.1BL	= BT.08!BT.09!BT.10 ; high order 3 bits of ...
 			    ; ... receive byte length of packet
-RS.1FE	= BIT02		; indicates a framing alignment error
-RS.1CE	= BIT01		; indicates that a CRC error has been detected
+RS.1FE	= BT.02	; indicates a framing alignment error
+RS.1CE	= BT.01	; indicates that a CRC error has been detected
 ;
 ; Bits defined for Receive status word #2
 RS.2BL	= 377	; low order 8 bits of receive...
 		; ...byte length of packet
-;
+;---------------------------------------------------------------------------
 ; Bits defined for DMAOP
-DM.RDY	= BIT07	; Operation is completed
-DM.NXM	= BIT06	; NMX error
-DM.WRO	= BIT01	; DMA write operation
-DM.RDO	= BIT00	; DMA read operation
-RX.BFS	= BIT02	; Select receive buffer
-TX.BFS	= BIT03	; Select transmit buffer
-TX.ERR	= BIT00	; Transmit error
-RX.ERR	= BIT01	; Receive error
-NX.ERR	= BIT07	; NXM error
-;
+DM.RDY	= BT.07	; Operation is completed
+DM.NXM	= BT.06	; NMX error
+DM.WRO	= BT.01	; DMA write operation
+DM.RDO	= BT.00	; DMA read operation
+RX.BFS	= BT.02	; Select receive buffer
+TX.BFS	= BT.03	; Select transmit buffer
+;---------------------------------------------------------------------------
+; Bits defined for various errors
+TX.ERR	= BT.00	; Transmit error
+RX.ERR	= BT.01	; Receive error
+NX.ERR	= BT.07	; NXM error
+PH.ERR	= BT.06	; Phy error
+;---------------------------------------------------------------------------
 ; Bits defined for Ethernet ECTST register
-ET.RDD	= BIT07	; Receive operation has been completed
-ET.TRD	= BIT06	; Ready to transmit
-ET.SKB	= BIT05	; Skip byte
-ET.STP	= BIT04	; Setup packet
-ET.EXL	= BIT03	; External loop mode
-ET.IEL	= BIT02	; Internal-external loop mode
-ET.INL	= BIT01	; Internal loop mode
-ET.REN	= BIT00	; Receiver is enabled
-ET.RDY	= BIT14	; Packet has been received
-ET.TXD	= BIT13	; Transmit operation has been completed
-ER.CR	= BIT12	; Loss of carrier error
-ER.MDR	= BIT11	; MDC error
-ER.TXR	= BIT10	; Transmit error
-ER.RDR	= BIT09	; Receive error
-ER.CRR	= BIT08	; Receive CRC error
-;
+ET.RDD	= BT.07	; Receive operation has been completed
+ET.TRD	= BT.06	; Ready to transmit
+ET.SKB	= BT.05	; Skip byte
+ET.STP	= BT.04	; Setup packet
+ET.EXL	= BT.03	; External loop mode
+ET.IEL	= BT.02	; Internal-external loop mode
+ET.INL	= BT.01	; Internal loop mode
+ET.REN	= BT.00	; Receiver is enabled
+ET.RDY	= BT.14	; Packet has been received
+ET.TXD	= BT.13	; Transmit operation has been completed
+ER.CR	= BT.12	; Loss of carrier error
+ER.MDR	= BT.11	; MDC error
+ER.TXR	= BT.10	; Transmit error
+ER.RDR	= BT.09	; Receive error
+ER.CRR	= BT.08	; Receive CRC error
+;---------------------------------------------------------------------------
 ; Bits defined for EGMOD
-BD.ROM	= BIT15	; Load BDROM
-ST.RST	= BIT07	; Sanity timer reset
-ET.PRM	= BIT06	; Promiscuous mode
-ET.MCT	= BIT05	; Multicast mode
-EA.RXB	= BIT04	; Ethernet address bus to RXBUF
-EA.TXB	= BIT03	; Ethernet address bus to TXBUF
+BD.ROM	= BT.15	; Load BDROM
+ST.RST	= BT.07	; Sanity timer reset
+ET.PRM	= BT.06	; Promiscuous mode
+ET.MCT	= BT.05	; Multicast mode
+EA.RXB	= BT.04	; Ethernet address bus to RXBUF
+EA.TXB	= BT.03	; Ethernet address bus to TXBUF
+EA.LED	= BT.00!BT.01!BT.02 ; LED bits
+EA.LD1	= BT.00
+EA.LD2	= BT.01
+EA.LD3	= BT.02
+;---------------------------------------------------------------------------
+; Bits defined for MDC ops
+MD.RDY	= BT.15	; Ready bit
+MD.WR	= BT.06	; Write/read bit
+MD.OP	= BT.05	; Start operation
+MD.REG	= 37	; Register bits
+MD.NRM	= 20500	; Initial parameters: 100 Mb, full duplex, no autoneg.
 ;
-;*************************************************
-; Interrupt vectors table macro
-;*************************************************
+	.SBTTL	 Macro definition
+;===========================================================================
+; Macro definition
+;
 	.MACRO	IV, OFFSET, ADR
 	.	= OFFSET
 	.IF	NB, <ADR>
@@ -223,9 +241,10 @@ EA.TXB	= BIT03	; Ethernet address bus to TXBUF
 	.WORD	340		; PS=340
 	.ENDM
 ;
-;*************************************************
+	.SBTTL	Interrupt vectors table
+;---------------------------------------------------------------------------
 ; Generate interrupt vectors table
-;*************************************************
+;
 	.ASECT
 	. = 0
 	IV	0
@@ -246,9 +265,11 @@ EA.TXB	= BIT03	; Ethernet address bus to TXBUF
 	IV	74
 	IV	100, TMRIRQ	; 100 Timer 50Hz
 ;
-;**************************************************
-;* Start
-;**************************************************
+	.SBTTL	Main routines
+	 .SBTTL	 Start point (initial settings)
+;===========================================================================
+; Start
+;
 START:
 	MOV	#RAMTOP, SP	; SP is on the top
 ;
@@ -286,13 +307,17 @@ START:
 	MOV	#84., R5	; Elements number
 5$:	CLRB	(R4)+		; Clear ...
 	SOB	R5, 5$		; ... all
+; Init Ethernet transceiver
+	CALL	MDCINI		; Init ethernet transceiver
+	BCC	10$
+	HALT			; !!! Error !!!
 ;
-	CLR	RXMODE		; Not BD ROM read mode
-	BIC	#1, @#LQABAS	; Unblock external access to the bus
+10$:	BIC	#1, @#LQABAS	; Unblock external access to the bus
 ;
-;***********************************************
-;* Main
-;***********************************************
+	 .SBTTL	 Main loop
+;---------------------------------------------------------------------------
+; Main loop
+;
 MLOOP:	BIT	#CS.XL, @R3	; Check XL-bit
 	BNE	1$		; If not ready - continue
 	CALL	TXP		; Else - call transmit operation
@@ -307,12 +332,12 @@ MLOOP:	BIT	#CS.XL, @R3	; Check XL-bit
 	CALL	PBDROM		; Yes - let's do it
 3$:	BIT	#VR.RS,@#LQAVAR	; Check RS-bit
 	BEQ	4$		; Not set - return
-	CALL	TSTMOD		; Run tests if necessary
+	CALL	TSTMOD		; Run tests if requested
 4$:	BR	MLOOP		; Loop
 ;
-;***********************************************
-;* Transmit operation
-;***********************************************
+	 .SBTTL	 Transmit operation
+;===========================================================================
+;
 TXP:
 	BIS	#1, @#EGMOD	; Set indication
 	MOV	@#LQATLL, BDLL	; Get initial Tx BDL low order address bits
@@ -328,7 +353,7 @@ TXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 ; Process V-bit
 1$:	BIT	#AD.V, 2(R1)	; Check valid bit
 	BNE	2$		; There is no V-bit - return
-	BIS	#CS.XL, @R3	; Set XL-bit in the CSR
+	BIS	#<CS.XL!CS.XI>, @R3 ; Set XL-bit in the CSR
 ;	BIS	#CS.XI, @R3	; Set XI-bit in the CSR
 	JMP	32$
 ;
@@ -391,7 +416,7 @@ TXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 ; Send status words
 24$:	CALL	STWPR		; Send status words to host
 	BCS	28$		; Carry is set - NXM error
-	BIS	#CS.XI, @R3	; Set XI-bit in the CSR
+;	BIS	#CS.XI, @R3	; Set XI-bit in the CSR
 ;	BIS	#CS.XL, @R3	; Set XL-bit in the CSR
 ;
 ; Calculate next BDL address
@@ -401,15 +426,15 @@ TXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 ;
 ; Carry is set, NXM error.
 28$:	BISB	#<TX.ERR!NX.ERR>,ERRFLG	; Set error flags
-	BIS	#<CS.NI!CS.XL!CS.RL>,@R3 ; Set NI-bit in the CSR
+	BIS	#<CS.NI!CS.XL!CS.RL!CS.XI>,@R3 ; Set NI-bit in the CSR
 ;
 ; Return
 32$:	BIC	#1, @#EGMOD	; Clear indication
 	RETURN
 ;
-;***********************************************
-;* Receive operation
-;***********************************************
+	 .SBTTL	 Receive operation
+;===========================================================================
+;
 RXP:
 	BIS	#1, @#EGMOD	; Set indication
 ;
@@ -435,7 +460,7 @@ RXP:
 	BIS	#ET.RDD,@#ECTST	; ... set "receive-done" bit and ...
 	JMP	RXF$		; ... jump to finish
 4$:	MOV	R4, DATBCN	; Data set size in bytes
-	BIT	#BIT00, R4	; Is it even?
+	BIT	#BT.00, R4	; Is it even?
 	BEQ	5$		; Yes - continue
 	INC	R4		; No - make it even
 5$:	ASR	R4		; Convert to word number
@@ -455,32 +480,32 @@ RXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 ;
 ; Calculate word count
 1$:	MOV	DATWCN, R4	; Data size in words to R4
-	BNE	3$		; If data size = 0 then ...
+	BNE	2$		; If data size = 0 then ...
 	BIS	#CS.RL, @R3	; ... set RL-bit in the CSR ...
 	BR	RXF$		; ... and return
 ;
-3$:	ADD	WCOUNT, R4	; Compare size of received data and ...
+2$:	ADD	WCOUNT, R4	; Compare size of received data and ...
 				; ... DMA data buffer size
-	MOV	R4, DATWCN	; Store size of the reminder for the futher loop(s)
-	BLT	6$		; Size of received data is smaller
+	BLE	4$
 ;
-; Size of received data is greater then (or equal to) DMA data buffer size
-	MOV	WCOUNT, R5	; In this case we operate with ...
-	MOV	R5, @#DMACNT	; ... DMA data buffer size
-; Calc. number of bytes
-	TST	R4		; DATWCN = 0?
-	BNE	4$		; No - calculate bytes number
-	MOV	DATBCN, BCOUNT	; Yes - store for status word operation ...
-	BR	7$		; ... and br to DMA operation
-4$:	ASL	R5		; Convert to byte count 2's compl.
+; Size of received data is greater then DMA data buffer size
+	MOV	R4, DATWCN	; Store size of the reminder for the futher loop(s)
+	MOV	WCOUNT, R5	; Use WCOUNT for DMA operation ...
+	MOV	R5, @#DMACNT	; ... and store int in the register
+	ASL	R5		; Convert to byte count 2's compl.
 	ADD	R5, DATBCN	; Correct remaining byte count
 	NEG	R5		; 2's complement
 	MOV	R5, BCOUNT	; Number of bytes in the DMA data block
-	BR	7$		; Br to DMA operation
+	BR	7$
 ;
-; Size of received data is less then DMA data buffer size
-6$:	MOV	R4, @#DMACNT	; Set words number for DMA operation
-	MOV	DATBCN, BCOUNT	; Set bytes number for status words operation
+; Size of received data is less then (or equal to) DMA data buffer size
+4$:	MOV	DATWCN, R5
+	NEG	R5
+	MOV	R5, @#DMACNT	; Set
+	MOV	DATBCN, BCOUNT	;
+	TST	R4		; DATWCN = 0?
+	BEQ	7$		; Yes - br to DMA operation
+	CLR	DATWCN		; No - just clear it
 ;
 ; DMA transfer
 7$:	MOV	DATADR,@#DMALAD	; Initial local address to DMA reg
@@ -494,11 +519,10 @@ RXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 	CLR	R4		; Init 1-st status word
 	CLR	R5		; Init 2-nd status word
 	TST	DATWCN		; Is this the last data set?
-	BLE	9$		; Yes - use normal status word bits ...
-				; ... and br to final step
-	MOV	#UNLST, R4	; No - set "used" and not "last" ...
-	BR	10$		; ... data set and continue
-9$:	BIS	#ET.RDD,@#ECTST	; Set "receive-done" bit
+	BNE	9$		; No  - br to set "used" and not "last"
+	BIS	#ET.RDD,@#ECTST	; yes - set "receive-done" bit ...
+	BR	10$		; ... and br to final step
+9$:	MOV	#UNLST, R4	; No - set "used" and not "last" ...
 ; Check errors
 10$:	MOV	RECTST, R0	; Get status byte
 	BIT	#<ER.CRR!ER.RDR>,R0 ; Did we get errors?
@@ -530,15 +554,15 @@ RXL$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 ;
 ; Carry is set NXM error
 100$:	BISB	#<RX.ERR!NX.ERR>,ERRFLG	; Set error flags
-	BIS	#<CS.NI!CS.XL!CS.RL>,@R3 ; Set NI-bit in the CSR
+	BIS	#<CS.NI!CS.XL!CS.RL!CS.XI>,@R3 ; Set NI-bit in the CSR
 ;
 ; Return
 RXF$:	BIC	#1, @#EGMOD	; Clear indication
 	RETURN
 ;
-;***********************************************
-;* BD ROM operation
-;***********************************************
+	 .SBTTL	 BD ROM operation
+;===========================================================================
+;
 PBDROM:	BIS	#7, @#EGMOD	; Set indication
 	BIS	#CS.RL, @R3	; Restore RL-bit in the CSR
 ;-----------------------------------------------
@@ -637,20 +661,106 @@ PBDLC$:	MOV	BDLL, @#DMAHLA	; Set to DMA address (low order bits)
 ;-----------------------------------------------
 ; Carry is set NXM error
 100$:	BISB	#NX.ERR, ERRFLG	; Set error flags
-	BIS	#<CS.NI!CS.XL!CS.RL>,@R3 ; Set NI-bit in the CSR
+	BIS	#<CS.NI!CS.XL!CS.RL!CS.XI>,@R3 ; Set NI-bit in the CSR
 ;
 ; Return
 PBDEX$:	BIS	#EA.RXB,@#EGMOD	; RXBUF address to ethernet mode
 	BIC	#7, @#EGMOD	; Clear indication
 	RETURN
 ;
-;***********************************************
-;* Receive and process BDL block
-;*	R1 - BDL address
-;* Returns:
-;*	Carry clear - normal return, no errors
-;*	 set   - NXM
-;***********************************************
+	 .SBTTL	 Tests
+;===========================================================================
+; Run tests (if necessary)
+; Don't know yet what to test.
+;
+TSTMOD:	BIC	#<VR.S3!VR.S2!VR.S1>,@#LQAVAR ; Clear test bits
+	BIS	#1, @#LQABAS	; Block external bus access
+	BIS	#EA.LED,@#EGMOD	; Set indication
+; 5 sec delay
+	MOVB	TSEC, R0
+	ADD	#5, R0
+	CMP	R0, #60.
+	BMI	1$
+	SUB	#60., R0
+1$:	MOVB	R0, TWAIT
+	CALL	MTST
+	BCS	8$
+;
+2$:	CMPB	TSEC, TWAIT
+	BNE	2$
+;
+8$:	MOV	@#EGMOD, R0	; Get EGMOD value
+	BIC	#EA.LED, R0	; Clear led bits
+	MOV	@#LQAVAR, R4	; Get LQAVAR value
+	BIC	#^C<VR.S3!VR.S2!VR.S1>,R4 ; Clear all except ...
+					  ; ... test bits
+	SWAB	R4		; Shift test result ...
+	ASH	#-2, R4		; .. bits to the right (LSB)
+	BIS	R4, R0		; Switch on leds in accordance ...
+	MOV	R0, @#EGMOD	; ... with test result bits
+	BIC	#<VR.RS>,@#LQAVAR ; Test result is ready
+	MOV	@#LQAVAR, R0
+	BIC	#1, @#LQABAS	; Unblock external bus access
+	BIT	#<VR.S3!VR.S2!VR.S1>,@#LQAVAR
+	BEQ	10$
+	HALT
+10$:	RETURN
+;
+;-----------------------------------------------
+; RX/TX memory test
+;
+MTST:	BIC	#EA.RXB,@#EGMOD	; Set bus mode for RXBUF
+	BIC	#EA.TXB,@#EGMOD	; Set bus mode for TXBUF
+	MOV	#RXBUF, R4
+	MOV	#RXBSIZ, R5
+	CALL	BFTST
+	BCS	1$
+	BCC	2$
+	MOV	#TXBUF, R4
+	MOV	#TXBSIZ, R5
+	CALL	BFTST
+	BCC	2$
+1$:	BIS	#<VR.S3!VR.S2>,@#LQAVAR ; Set error bits
+2$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
+	BIS	#EA.TXB,@#EGMOD	; Restore ethernet mode for TXBUF
+	RETURN
+;-----------------------------------------------
+BFTST:	MOV	R1, -(SP)
+	MOV	R2, -(SP)
+	MOV	R3, -(SP)
+	MOV	R4, R2
+	MOV	R5, R0
+	CLR	R1
+	CLR	R3
+1$:	MOV	R1, (R2)
+	CMP	R1, (R2)+
+	BEQ	2$
+	INC	R3
+2$:	INC	STW1
+	SOB	R0, 1$
+	MOV	R4, R2
+	MOV	R5, R0
+	MOV	#177777, R1
+3$:	MOV	R1, (R2)
+	CMP	R1, (R2)+
+	BEQ	4$
+	INC	R3
+4$:	DEC	R1
+	SOB	R0, 3$
+	TST	R3
+	BEQ	8$
+	SEC
+	BR	9$
+8$:	CLC
+9$:	MOV	(SP)+, R3
+	MOV	(SP)+, R2
+	MOV	(SP)+, R1
+	RETURN
+;
+	.SBTTL	Internal routines
+	 .SBTTL	 BDL processing
+;===========================================================================
+;
 GETBDL:	MOV	R1, @#DMALAD	; Initial local address to DMA reg
 	CLRB	ERRFLG		; Clear error flags
 	CLR	10(R1)
@@ -682,9 +792,9 @@ GETBDL:	MOV	R1, @#DMALAD	; Initial local address to DMA reg
 	CLC			; Normal return
 4$:	RETURN
 ;
-;***********************************************
-;* Start DMA proc.
-;***********************************************
+	 .SBTTL	 DMA processing
+;===========================================================================
+;
 DMASRD:
 	BIS	#DM.RDO,@R2	; Set read operation
 	BR	DMAC$		; BR to main loop
@@ -701,10 +811,9 @@ DMAC$:	CLC			; Clear carry
 2$:	BIC	#<DM.RDO!DM.WRO>,@R2 ; Clear operation bits
 	RETURN
 ;
-;********************************************
-;* Status words processing
-;*   R1 - BDL address
-;********************************************
+	 .SBTTL	 Status words processing
+;===========================================================================
+;
 STWPR:	MOV	STW1, 10(R1)	; First status word
 	MOV	STW2, 12(R1)	; Second status word
 	MOV	BDLL, R4	; Get low order address bits
@@ -718,16 +827,9 @@ STWPR:	MOV	STW1, 10(R1)	; First status word
 	CALL	DMASRD		; Start DMA read operation
 	RETURN
 ;
-;********************************************
-;* NXM error
-;********************************************
-;NXMERR:
-;	BIS	#<CS.NI!CS.XI!CS.XL!CS.RL>,@R3 ; Set NI-bit in the CSR
-;	RETURN
+	 .SBTTL	 Setup packet processing
+;===========================================================================
 ;
-;********************************************
-;* Setup packet processing (rewrite mac address table)
-;********************************************
 SPACK:	MOV	R1, -(SP)
 	MOV	R2, -(SP)
 	MOV	R3, -(SP)
@@ -735,20 +837,20 @@ SPACK:	MOV	R1, -(SP)
 	MOVB	SETUPB, R5	; Get the initial value
 	MOV	R5, R4		; Save copy
 	MOV	@#EGMOD, R1	; Get ether general register value
-	BIC	#^C<EA.RXB!EA.TXB>,R1 ; Clear all except ethernet
-				      ; address mux control bits
+	BIC	#^C<EA.RXB!EA.TXB!EA.LED>,R1 ; Clear all except ...
+				; ... ethernet address mux ...
+				; ... control bits and led bits
 ; Promisc. and mcast bits
 	BIC	#^C<ET.PRM!ET.MCT>,R4 ; Clear all except needed bits
 	BIS	R4, R1		; Combine information in R1
-; Set LED bits
-	CLR	R2		; Prepare temp. register
+; Turn off LED bits
 	MOV	R5, R4		; Get copy of the setup byte
 	ASH	#-2, R4		; Shift to the right position
 	BIC	#^C<3>, R4	; Clear all except needed bits
-	MOVB	LEDS(R4), R2	; Get correct bit order
+	BEQ	2$		; No effect if 0
+	BICB	LEDS(R4), R1	; Turn off correct LED
 ; Set register
-	BIS	R2, R1		; Combine information and store ...
-2$:	MOV	R1, @#EGMOD	; .. the result in the register
+2$:	MOV	R1, @#EGMOD	; Set the result in the register
 ;
 ; Set initial sanity timer value
 	MOV	R5, R4
@@ -790,17 +892,17 @@ SPACK:	MOV	R1, -(SP)
 	MOV	(SP)+, R1
 	RETURN
 ;
-;********************************************
-;* Reset sanity timer value
-;********************************************
+	 .SBTTL	 Sanity timer reset
+;===========================================================================
+;
 SNTRES:
 	MOV	SNTVAL, SNTCV	; Set initial value
 	CLRB	SNTCK
 	RETURN
 ;
-;********************************************
-;* Compare MAC addresses
-;********************************************
+	 .SBTTL	 Compare MAC addresses
+;===========================================================================
+;
 CMPMAC:
 	MOV	R1, -(SP)
 	MOV	R2, -(SP)
@@ -830,121 +932,98 @@ CMPMAC:
 	MOV	(SP)+, R1
 	RETURN
 ;
-;********************************************
-;* Run tests (if necessary)
-;* Don't know yet what to test.
-;********************************************
-TSTMOD:	BIS	#1, @#LQABAS	; Block external bus access
-;	BIS	#1, @#EGMOD	; Set indication
-; 5 sec delay
-	MOVB	TSEC, R0
-	BIC	#1177600, R0
-	ADD	#5, R0
-	CMP	R0, #60.
-	BMI	1$
+	.SBTTL	 Init ethernet transceiver
+;===========================================================================
+;
+MDCINI:	BIS	#EA.LED, @#EGMOD
+	CALL	MDWAIT
+	BCS	6$
+1$:	MOV	#MD.NRM,@#EMDVAL ; Set initial parameters
+	CLR	R0		; Register number 0
+	CALL	MDCWR		; Write data
+	BCS	6$
+	BR	8$
+2$:	CLR	R0		; Register number 0
+	CALL	MDCRD		; Read data
+	BCS	6$
+3$:	MOV	@#EMDVAL, R0	; Get MDC value
+	CMP	#MD.NRM, R0	; Compare actial and expected values
+	BEQ	8$		; If equal - br to normal return
+	SEC			; If not - set carry
+6$:	BIC	#<EA.LD3!EA.LD2>,@#EGMOD ; Turn off/on ...
+	BIS	#EA.LD1,@#EGMOD		 ; ... correct LEDs
+	BIC	#<VR.S3!VR.S2>,@#LQAVAR ; Clear/set ...
+	BIS	#VR.S1,@#LQAVAR	; ... correct bits
+	BR	10$
+8$:	CLC			; Clear carry (normal return)
+10$:	RETURN
+
+;---------------------------------------------------------------------------
+; Read MDC value
+; Parameter:
+;    R0 - register number
+;
+MDCRD:	BICB	#^C<MD.REG>, R0
+	BICB	#MD.WR, R0
+	BR	MDCOP
+;---------------------------------------------------------------------------
+; Write MDC value
+; Parameter:
+;    R0 - register number
+;
+MDCWR:	BICB	#^C<MD.REG>, R0
+	BISB	#MD.WR, R0
+;---------------------------------------------------------------------------
+; MDC operation
+; Parameter:
+;    R0 - control byte
+;
+MDCOP:	BISB	#MD.OP, R0	; Set start bit ...
+	MOVB	R0, @#EMDCTR	; ... and start operation
+	CALL	MDWAIT
+	RETURN
+;---------------------------------------------------------------------------
+; Wait ready status. 1 sec timeout
+;
+MDWAIT:	MOVB	TTICK, R0	; Store current tick value
+	ADD	#55, R0
+	CMP	#60., R0
+	BPL	1$
 	SUB	#60., R0
-	CALL	MEMTST
-	BCS	8$
-;
-1$:	CMPB	TSEC, R0
-	BNE	1$
-	BR	9$
-;
-8$:	MOV	@#LQAVAR, R0
-	SWAB	R0
-	ASH	#-2, R0
-	MOV	R0, @#EGMOD
-	HALT
-;
-9$:	BIC	#1, @#LQABAS	; Unblock external bus access
-	BIC	#<VR.RS!VR.S3!VR.S2!VR.S1>,@#LQAVAR ; Set - just clear result bits
-;	BIC	#1, @#EGMOD	; Clear indication
+1$:	TST	@#EMDCTR	; Is it ready?
+	BMI	2$		; Yes - br to normal return
+	CMPB	R0, TTICK	; Timeout?
+	BNE	1$		; No - loop
+	BISB	#PH.ERR, ERRFLG	; Yes - set error flag ...
+	SEC			; ... and carry
+	RETURN
+2$:	CLC			; Clear carry
 	RETURN
 ;
-;********************************************
-;* RX/TX memory test
-;********************************************
-MEMTST:	BIC	#EA.RXB,@#EGMOD	; Set bus mode for RXBUF
-	BIC	#EA.TXB,@#EGMOD	; Set bus mode for TXBUF
-	MOV	#RXBUF, R4
-	MOV	#RXBSIZ, R5
-	CALL	BUFTST
-	BCS	1$
-	MOV	#TXBUF, R4
-	MOV	#TXBSIZ, R5
-	CALL	BUFTST
-	BCC	1$
-	BIS	#<VR.S3!VR.S2>,@#LQAVAR ; Set error bits
-	BIC	#VR.S1, @#LQAVAR
-1$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
-	BIS	#EA.TXB,@#EGMOD	; Restore ethernet mode for TXBUF
-	RETURN
+	.SBTTL	Timer interrupt handler
+;===========================================================================
 ;
-BUFTST:	CLC
-	MOV	R1, -(SP)
-	MOV	R2, -(SP)
-	MOV	R3, -(SP)
-	MOV	R4, R2
-	MOV	R5, R0
-	CLR	R1
-1$:	MOV	R1, (R2)+
-	INC	R1
-	SOB	R0, 1$
-	CLR	R1
-	CLR	R3
-	MOV	R4, R2
-	MOV	R5, R0
-2$:	CMP	R1, (R2)+
-	BEQ	3$
-	INC	R3
-3$:	INC	R1
-	SOB	R0, 2$
-	MOV	#177777, R1
-	MOV	R4, R2
-	MOV	R5, R0
-4$:	MOV	R1, (R2)+
-	DEC	R1
-	SOB	R0, 4$
-	MOV	#177777, R1
-	MOV	R4, R2
-	MOV	R5, R0
-5$:	CMP	R1, (R2)+
-	BEQ	6$
-	INC	R3
-6$:	DEC	R1
-	SOB	R0, 5$
-	TST	R3
-	BEQ	9$
-	SEC
-9$:	MOV	(SP)+, R3
-	MOV	(SP)+, R2
-	MOV	(SP)+, R1
-	RETURN
-;
-;********************************************
-;* Timer interrupt handler
-;********************************************
 TMRIRQ:
-;
+;-----------------------------------------------
 ; Ticks
 	INCB	TTICK		; Tics counter
 	INCB	SNTCK
 	CMPB	TTICK, #50.	; Got 50 tics?
 	BNE	100$		; No - br to finish
 	CLRB	TTICK		; Clear tics counter
-;
+;-----------------------------------------------
 ;  Seconds
 	INCB	TSEC		; Increment seconds counter
 	CMPB	TSEC, #60.	; Got 60 seconds?
 	BNE	100$		; No - br to finish
 	CLRB	TSEC		; Clear seconds counter
-;
+;-----------------------------------------------
 ; Minutes
 	INCB	TMIN		; Increment minutes counter
 	CMPB	TMIN,#60.	; Got 60 minutes?
 	BNE	100$		; Not yet - br to RTI
 	CLRB	TMIN		; Yes - clear minutes counter and ...
-;
+;-----------------------------------------------
 ; Process 5-ticks counter
 100$:
 	CMPB	SNTCK, #5
@@ -952,15 +1031,15 @@ TMRIRQ:
 	CLRB	SNTCK
 	INC	SNTCV
 	BNE	110$
-;
+;-----------------------------------------------
 ; Sanity counter is equal to zero
 	BISB	#ST.RST,@#EGMOD ; Generate BDCOK
 ;
 110$:	RTI
 ;
-;==================================================
-;  Data segment
-;==================================================
+	.SBTTL	Data section
+;===========================================================================
+;
 MTADR:	.BLKW	1	; Address of the MACTAB entry
 MACTAB:	.BLKB	84.	; Mac address table
 DATADR:	.BLKW	1	; Data address offset
@@ -975,8 +1054,7 @@ BDLL:	.BLKW	1	; BDL low address bits
 STW1:	.BLKW	1	; 1-st status word
 STW2:	.BLKB	1	; 2-nd status word
 	.BLKB	1
-RXMODE:	.WORD	0	; 000000 - normal RX buffer processing
-			; 100000 - BD ROM processing
+;-----------------------------------------------
 ; Sanity timer
 SNTIV:	.WORD	-3	; -0.3 sec (instead of 0.25)
 	.WORD	-10.	; -1 sec
@@ -990,19 +1068,23 @@ SNTVAL:	.BLKW	1	; Initial value
 SNTCV:	.BLKW	1	; Current counter
 SETUPB:	.BLKB	1	; Setup control byte copy
 SNTCK:	.BLKB	1
+;-----------------------------------------------
 ; LEDS converter
 LEDS:	.BYTE	0	; Leds - 000
 	.BYTE	1	; Leds - 001
 	.BYTE	2	; Leds - 010
 	.BYTE	4	; Leds - 100
+;-----------------------------------------------
 ; Error flags
 ERRFLG:	.BLKB	1
 EMODCP:	.BLKB	1
+;-----------------------------------------------
 ; Timer counters
 TTICK:	.BLKB	1
 TSEC:	.BLKB	1
 TMIN:	.BLKB	1
+TWAIT:	.BLKB	1
 TCNT	= .-TTICK
 	.EVEN
-;
+;-----------------------------------------------
 	.END  0
