@@ -118,13 +118,12 @@ wire lestb = lwb_cyc_i & let_stb_i & ~let_ack;		// строб цикла шин�
 wire lerd_req = lestb & ~lwb_we_i;						// запрос чтения
 wire lewr_req = lestb & lwb_we_i;						// запрос записи
 
-reg etack;
-always @(posedge lwb_clk_i)
-   if (let_stb_i & lwb_cyc_i)
-		etack <= 1'b1;
-   else
-		etack <= 1'b0;
-assign let_ack = etack & let_stb_i;
+reg [1:0] etack;
+always @(posedge lwb_clk_i) begin
+	etack[0] <= lwb_cyc_i & let_stb_i;
+	etack[1] <= lwb_cyc_i & etack[0];
+end
+assign let_ack = lwb_cyc_i & let_stb_i & etack[1];
 
 //************************************************
 // Регистр управления/состояния - csr - 174456
@@ -163,7 +162,7 @@ reg  [7:0]	var_iv;				// Interrupt vector
 reg			var_id = 1'b0;		// Identity test bit
 reg			blkreg = 1'b0;
 wire [15:0]	vareg;
-assign vareg = {var_ms,s4_i,var_rs,var_s3,var_s2,var_s1,var_iv,1'b0,var_id};
+assign vareg = {var_ms,s4_i,var_rs,var_s3,var_s2,var_s1,var_iv[7:0],1'b0,var_id};
 
 //************************************************
 // Регистр адреса блока приема (RBDL) - 174444, 174446
@@ -352,8 +351,8 @@ always @(posedge lwb_clk_i) begin
 				case (ewb_adr_i[2:0])
 					3'b000:			// Base + 00 - MD
 						if(allow_bus_ops) e_mdmux <= ewb_dat_i[7];
-//					3'b001:			// Base + 02 - MDVAL
-//						if(allow_bus_ops) e_mdval <= ewb_dat_i[7:0];
+//					3'b001: begin	// Base + 02
+//					end
 					3'b010: 			// Base + 04 - RBDL low
 						if(allow_bus_ops) rbdl_lwr[7:1] <= ewb_dat_i[7:1];
 					3'b011:			// Base + 06 - RBDL high
@@ -386,8 +385,6 @@ always @(posedge lwb_clk_i) begin
 			if(ewb_sel_i[1]) begin    // Запись старшего байта
 				if(allow_bus_ops) begin
 					case (ewb_adr_i[2:0])
-//						3'b001:			// Base + 02 - MDVAL
-//							if(allow_bus_ops) e_mdval <= ewb_dat_i[15:8];
 						3'b010: begin  // Base + 04 - RBDL low
 							rbdl_lwr[15:8] <= ewb_dat_i[15:8];
 						end
@@ -454,29 +451,25 @@ always @(posedge lwb_clk_i) begin
 						blkreg <= lwb_dat_i[0];
 					end
 					3'b111: begin  // Base + 16 - CSR
-						if(allow_bus_ops) begin
-							csr_ni <= lwb_dat_i[2];
-							csr_xl <= lwb_dat_i[4];
-							csr_rl <= lwb_dat_i[5];
-							csr_xi <= lwb_dat_i[7];
-						end
+						csr_ni <= lwb_dat_i[2];
+						csr_xl <= lwb_dat_i[4];
+						csr_rl <= lwb_dat_i[5];
+						csr_xi <= lwb_dat_i[7];
 					end
 				endcase
 			end
 			if(lwb_sel_i[1]) begin    // Запись старшего байта
-				if(allow_bus_ops) begin
-					case (lwb_adr_i[2:0])
-						3'b110: begin  // Base + 14 - VAR
-							var_s1 <= lwb_dat_i[10];
-							var_s2 <= lwb_dat_i[11];
-							var_s3 <= lwb_dat_i[12];
-							var_rs <= lwb_dat_i[13];
-						end
-						3'b111: begin  // Base + 16 - CSR
-							csr_ri <= lwb_dat_i[15];
-						end
-					endcase
-				end
+				case (lwb_adr_i[2:0])
+					3'b110: begin  // Base + 14 - VAR
+						var_s1 <= lwb_dat_i[10];
+						var_s2 <= lwb_dat_i[11];
+						var_s3 <= lwb_dat_i[12];
+						var_rs <= lwb_dat_i[13];
+					end
+					3'b111: begin  // Base + 16 - CSR
+						csr_ri <= lwb_dat_i[15];
+					end
+				endcase
 			end
 		end
 	end
@@ -541,8 +534,10 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 		end
 	end
 	else begin
-		if(~e_stse_i[6] & rxdon)
+		if(~e_stse_i[6] & rxdon)			// Сброс сигнала принятых данных
 			rxdon <= 1'b0;
+		if(~e_mdstat_i[7] & e_mdctrl[5])	// Сброс сигнала старта MDC
+			e_mdctrl[5] <= 1'b0;
 	end
 end
 
