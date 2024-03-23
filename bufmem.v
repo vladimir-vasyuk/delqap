@@ -45,15 +45,7 @@ begin
    ack[1] <= wb_cyc_i & ack[0];
 end
 assign wb_ack_o = wb_cyc_i & wb_stb_i & ack[1];
-/*
-reg ack;
-always @(posedge wb_clk_i)
-   if (wb_stb_i & wb_cyc_i)
-		ack <= 1'b1;
-   else
-		ack <= 1'b0;
-assign wb_ack_o = ack & wb_stb_i;
-*/
+
 // Блок ПЗУ
 rom bdrom(
    .address(wb_adr_i[11:1]),
@@ -180,15 +172,6 @@ wire bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o;	// строб цикла ши
 wire bus_we = bus_strobe & wb_we_i;						// запрос записи
 
 // Формирование сигнала подтверждения выбора устройства
-/*
-reg ack;
-always @(posedge wb_clk_i)
-   if (wb_stb_i & wb_cyc_i)
-		ack <= 1'b1;
-   else
-		ack <= 1'b0;
-assign wb_ack_o = ack & wb_stb_i;
-*/
 reg  [1:0] ack;
 always @(posedge wb_clk_i) begin
    ack[0] <= wb_cyc_i & wb_stb_i;
@@ -270,21 +253,18 @@ assign enaprg = prg_stb_i? (wb_we_i ? wb_sel_i : 2'b11) : 2'b00;
 wire [15:0]	prgdat, romdat;
 assign wb_dat_o = rom_stb_i? romdat : prgdat;
 
-reg prgack;
+// Формирование сигнала подтверждения выбора устройства
+reg  [1:0] prgack;
+always @(posedge wb_clk_i) begin
+   prgack[0] <= wb_cyc_i & prg_stb_i;
+   prgack[1] <= wb_cyc_i & prgack[0];
+end
 reg [1:0] romack;
 always @(posedge wb_clk_i) begin
-   if (prg_stb_i & wb_cyc_i)
-		prgack <= 1'b1;
-   else
-		prgack <= 1'b0;
-   if (rom_stb_i & wb_cyc_i) begin
-		romack[0] <= rom_stb_i;
-		romack[1] <= romack[0];
-	end
-   else
-		romack <= 2'b0;
-end	
-assign wb_ack_o = (romack[1] & rom_stb_i) | (prgack & prg_stb_i);
+	romack[0] <= wb_cyc_i & rom_stb_i;
+	romack[1] <= wb_cyc_i & romack[0];
+end
+assign wb_ack_o = (romack[1] & rom_stb_i) | (prgack[1] & prg_stb_i);
 
 firmw ram(
    .address(wb_adr_i[11:1]),
