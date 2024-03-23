@@ -4,18 +4,18 @@
 // Модуль MAC адреса
 //=================================================================================
 module small_rom
-#(parameter ADDR_WIDTH = 3, parameter WIDTH = 8, parameter FILE = "../../hdl/delqap/sarom.txt")
+#(parameter FILE = "../../hdl/delqap/sarom.txt")
 (
-   input                      clk,
-// input [ADDR_WIDTH - 1:0]   addr,
-// output [WIDTH - 1:0]    	q
-   output [63:0]              q
+//	input				clk,
+//	input  [1:0]	addr,
+//	output [15:0]	q
+	output [63:0]	q
 );
 
-reg [WIDTH - 1:0]mem[2**ADDR_WIDTH - 1:0];
-
-//assign q = mem[addr];
+reg  [7:0]	mem[7:0];
+//wire [1:0]	adr;
 assign q = {mem[7], mem[6], mem[5], mem[4], mem[3], mem[2], mem[1], mem[0]};
+//assign q = mem[addr];
 
 initial begin
    $readmemh(FILE, mem);
