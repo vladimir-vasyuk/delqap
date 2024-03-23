@@ -8,7 +8,7 @@
 module extregs(
 // внутренняя шина
 	input				lwb_clk_i,	// тактовая частота шины
-	input  [2:0]	lwb_adr_i,	// адрес 
+	input  [3:0]	lwb_adr_i,	// адрес 
 	input  [15:0]	lwb_dat_i,	// входные данные
 	output [15:0]	lwb_dat_o,	// выходные данные
 	input				lwb_cyc_i,	// начало цикла шины
@@ -36,7 +36,7 @@ module extregs(
 // Ethernet
 	input				let_stb_i,	// строб выбора регистров ethernet
 	output [9:0]	e_mode_o,	// управляющие сигналы для модуля ethernet
-	input  [6:0]	e_stse_i,	// состояние модуля ethernet
+	input  [7:0]	e_stse_i,	// состояние модуля ethernet
 	output [10:0]	e_txcntb_o,	// кол-во байт каналы передачи
 	input	 [10:0]	e_rxcntb_i,	// кол-во байт каналы приема
 	output [15:0]	e_mdval_o,	// данные для блока MDC
@@ -145,8 +145,9 @@ reg			csr_ni = 1'b0;		// 02	Nonexistance-memory timeout Interrupt (RO)
 reg			csr_sr = 1'b0;		// 01	Software Reset (RW)
 reg			csr_re = 1'b0;		// 00	Receiver Enable (RW)
 wire [15:0] csr;
-assign csr_ca = (~csr_il)? 1'b0 : 1'b1;//(~errs[4]);
-assign csr = {csr_ri,1'b0,1'b0,1'b1,1'b0,csr_se,csr_el,csr_il,csr_xi,csr_ie,csr_rl,csr_xl,csr_bd,csr_ni,csr_sr,csr_re};
+//assign csr_ca = (~csr_il)? 1'b0 : 1'b1;//(~errs[4]);
+assign csr_ca = (~csr_il)? 1'b0 : e_stse_i[7];
+assign csr = {csr_ri,1'b0,csr_ca,1'b1,1'b0,csr_se,csr_el,csr_il,csr_xi,csr_ie,csr_rl,csr_xl,csr_bd,csr_ni,csr_sr,csr_re};
 
 //************************************************
 // Регистр адреса ветора - var - 174454
@@ -199,12 +200,13 @@ soft_reset sftresm(
 // MAC address ROM
 //
 wire        sa_rom_chk;       // Checksum signal
-wire [63:0] macval;
-reg  [2:0]  maddr;
 assign sa_rom_chk = csr_el & (~csr_bd) & (~csr_re);
+wire [63:0] macval;
+//wire [15:0] macval;
+//wire [1:0]  maddr = eread_req? (sa_rom_chk? 2'b11 : ewb_adr_i[2:1]) : (lerd_req? lwb_adr_i[1:0] : 2'b0);
 small_rom sarom(
-   .clk(lwb_clk_i),
-//	 .addr(maddr),
+//   .clk(lwb_clk_i),
+//	.addr(maddr),
    .q(macval)
 );
 
@@ -287,66 +289,94 @@ assign eth_txmd_o = txrdy & eadr_mod[0];
 
 
 //************************************************
-// Работа с регистрами
-//
-//always @(posedge lwb_clk_i, posedge comb_res) begin
+// Работа с внешними регистрами
+// Чтение регистров внешняя шина
+always @(posedge lwb_clk_i) begin
+	if (eread_req) begin
+		case (ewb_adr_i[2:0])
+			3'b000: begin	// Base + 00
+				if (sa_rom_chk)
+					edat <= {8'hFF, macval[55:48]};
+				else
+					edat <= e_mdmux? {8'h00, e_mdstat_i[7:0]} : {8'hFF, macval[7:0]};
+			end
+			3'b001: begin	// Base + 02
+				if (sa_rom_chk)
+					edat <= {8'hFF, macval[63:56]};
+				else
+					edat <= e_mdmux? {9'h00, e_stse_i[6:0]} : {8'hFF, macval[15:8]};
+			end
+			3'b010: begin	// Base + 04
+				edat <= {8'hFF, macval[23:16]};
+			end
+			3'b011: begin	// Base + 06
+				edat <= {8'hFF, macval[31:24]};
+			end
+			3'b100: begin	// Base + 10
+				edat <= {8'hFF, macval[39:32]};
+			end
+			3'b101: begin	// Base + 12
+				edat <= {8'hFF, macval[47:40]};
+			end
+			3'b110: begin	// Base + 14 - VAR
+				edat <= vareg;
+			end
+			3'b111: begin	// Base + 16 - CSR
+				edat <= csr;
+			end
+		endcase 
+	end
+end
+// Чтение регистров внутренняя шина
+always @(posedge lwb_clk_i) begin
+	if (lread_req) begin
+		case (lwb_adr_i[2:0])
+			3'b000: begin	// Base + 00
+				ldat <= {15'b0, blkreg};
+			end
+//			3'b001: begin	// Base + 02
+//			end
+			3'b010: begin	// Base + 04 - RBDL low
+				ldat <= {rbdl_lwr[15:1], 1'B0};
+			end
+			3'b011: begin	// Base + 06 - RBDL high
+				ldat <= {10'b0, rbdl_hir[5:0]};
+			end
+			3'b100: begin	// Base + 10 - TBDL low
+				ldat <= {tbdl_lwr[15:1], 1'B0};
+			end
+			3'b101: begin	// Base + 12 - TBDL high
+				ldat <= {10'b0, tbdl_hir[5:0]};
+			end
+			3'b110: begin	// Base + 14 - VAR
+				ldat <= vareg;
+			end
+			3'b111: begin	// Base + 16 - CSR
+				ldat <= csr;
+			end
+		endcase 
+	end
+end
+// Сброс регистров и запись регистров 
 always @(posedge lwb_clk_i) begin
 	// Сброс регистров
-   if(comb_res) begin
-      // Сброс регистра управления
-      csr_ri  <= 1'b0; csr_se <= 1'b0; csr_el <= 1'b0;
-      csr_il <= 1'b0; csr_xi <= 1'b0; csr_ie <= 1'b0; csr_rl <= 1'b1; csr_xl <= 1'b1;
-      csr_bd <= 1'b0; csr_ni <= 1'b0; csr_sr <= 1'b0; csr_re <= 1'b0;
-      // Сброс регистра вектора
-      if(~res_soft) begin	// Не программный сброс
-         var_id <= 1'b0; var_iv <= 8'o0; var_rs  <= 1'b1;
-         var_s3 <= 1'b1; var_s2 <= 1'b1; var_s1 <= 1'b1;
-         var_ms <= s3_i;// var_os <= s4_i;
-      end
+	if(comb_res) begin
+		// Сброс регистра управления
+		csr_ri  <= 1'b0; csr_se <= 1'b0; csr_el <= 1'b0;
+		csr_il <= 1'b0; csr_xi <= 1'b0; csr_ie <= 1'b0; csr_rl <= 1'b1; csr_xl <= 1'b1;
+		csr_bd <= 1'b0; csr_ni <= 1'b0; csr_sr <= 1'b0; csr_re <= 1'b0;
+		// Сброс регистра вектора
+		if(~res_soft) begin	// Не программный сброс
+			var_id <= 1'b0; var_iv <= 8'o0; var_rs  <= 1'b1;
+			var_s3 <= 1'b1; var_s2 <= 1'b1; var_s1 <= 1'b1;
+			var_ms <= s3_i;// var_os <= s4_i;
+		end
 		// Сброс регистров MD
 		e_mdmux <= 1'b0;
 	end
 	else begin
-		// -----------------------------
-		// Внешняя шина
-		// Чтение регистров
-		if (eread_req) begin
-			case (ewb_adr_i[2:0])
-				3'b000: begin	// Base + 00
-					if (sa_rom_chk)
-						edat <= {8'hFF, macval[55:48]};
-					else
-						edat <= e_mdmux? {8'h00, e_mdstat_i[7:0]} : {8'hFF, macval[7:0]};
-				end
-				3'b001: begin	// Base + 02
-					if (sa_rom_chk)
-						edat <= {8'hFF, macval[63:56]};
-					else
-						edat <= e_mdmux? {9'h00, e_stse_i[6:0]} : {8'hFF, macval[15:8]};
-				end
-				3'b010: begin	// Base + 04
-					edat <= {8'hFF, macval[23:16]};
-				end
-				3'b011: begin	// Base + 06
-					edat <= {8'hFF, macval[31:24]};
-				end
-				3'b100: begin	// Base + 10
-					edat <= {8'hFF, macval[39:32]};
-				end
-				3'b101: begin	// Base + 12
-					edat <= {8'hFF, macval[47:40]};
-				end
-				3'b110: begin	// Base + 14 - VAR
-					edat <= vareg;
-				end
-				3'b111: begin	// Base + 16 - CSR
-					edat <= csr;
-				end
-			endcase 
-		end
-		//-----------------------------
-		// Запись регистров
-		else if (ewrite_req) begin
+		// Запись регистров внешняя шина
+		if (ewrite_req) begin
 			if (ewb_sel_i[0]) begin   // Запись младшего байта
 				case (ewb_adr_i[2:0])
 					3'b000:			// Base + 00 - MD
@@ -412,39 +442,8 @@ always @(posedge lwb_clk_i) begin
 				end
 			end
 		end
-		// -----------------------------
-		// Внутренняя шина
-      // Чтение регистров 
-      if (lread_req) begin
-         case (lwb_adr_i[2:0])
-				3'b000: begin	// Base + 00
-					ldat <= {15'b0, blkreg};
-				end
-//				3'b001: begin	// Base + 02
-//				end
-				3'b010: begin	// Base + 04 - RBDL low
-					ldat <= {rbdl_lwr[15:1], 1'B0};
-				end
-            3'b011: begin	// Base + 06 - RBDL high
-               ldat <= {10'b0, rbdl_hir[5:0]};
-            end
-            3'b100: begin	// Base + 10 - TBDL low
-               ldat <= {tbdl_lwr[15:1], 1'B0};
-            end
-            3'b101: begin	// Base + 12 - TBDL high
-               ldat <= {10'b0, tbdl_hir[5:0]};
-            end
-            3'b110: begin	// Base + 14 - VAR
-               ldat <= vareg;
-            end
-            3'b111: begin	// Base + 16 - CSR
-               ldat <= csr;
-            end
-         endcase 
-      end
-		//-----------------------------
-		// Запись регистров
-		else if (lwrite_req) begin
+		// Запись регистров внутренняя шина
+		if (lwrite_req) begin
 			if (lwb_sel_i[0]) begin   // Запись младшего байта
 				case (lwb_adr_i[2:0])
 					3'b000: begin	// Base + 00
@@ -477,58 +476,68 @@ end
 
 //************************************************
 // Работа с регистрами ethernet
-//
+// Чтение регистров
+always @(posedge lwb_clk_i) begin
+	if (lerd_req == 1'b1) begin
+		case (lwb_adr_i[3:0])
+			4'b0000:	// 24040
+				etdat <= {1'b0 , e_stse_i[6:0], e_mode[7:0]};
+			4'b0001:	// 24042
+				etdat <= {5'b0, e_rxcntb_i[10:0]};
+			4'b0010:	// 24044
+				etdat <= e_mdval_i;
+			4'b0011:	// 24046
+				etdat <= {e_mdstat_i[7:0], 1'b0, e_mdctrl[6:0]};
+			4'b0100:	// 24050
+				etdat <= {bdrom, 8'b0, promis, mcast, eadr_mod[1:0], leds[2:0]};
+//			4'b0110:	// 24054
+//			4'b0111:	// 24056
+			4'b1000:
+				etdat <= {macval[15:8], macval[7:0]};
+			4'b1001:
+				etdat <= {macval[31:24], macval[23:16]};
+			4'b1010:
+				etdat <= {macval[47:40], macval[39:32]};
+			4'b1011:
+				etdat <= {macval[55:48], macval[63:56]};
+		endcase
+	end
+end
+// Сброс и запись регистров
 always @(posedge lwb_clk_i, posedge comb_res) begin
    if(comb_res) begin 
 		// Сброс регистров MD
 		e_mdctrl <= 7'b0;
 	end
-	else if (lerd_req == 1'b1) begin
-		case (lwb_adr_i[2:0])
-			3'b000:	// 24040
-				etdat <= {1'b0 , e_stse_i[6:0], e_mode[7:0]};
-			3'b001:	// 24042
-				etdat <= {5'b0, e_rxcntb_i[10:0]};
-			3'b010:	// 24044
-				etdat <= e_mdval_i;
-			3'b011:	// 24046
-				etdat <= {e_mdstat_i[7:0], 1'b0, e_mdctrl[6:0]};
-			3'b100:	// 24050
-				etdat <= {bdrom, 8'b0, promis, mcast, eadr_mod[1:0], leds[2:0]};
-//			3'b110:	// 24054
-//			3'b111:	// 24056
-		endcase
-	end
-	// Запись регистров
 	else if (lewr_req == 1'b1) begin
 		if (lwb_sel_i[0] == 1'b1) begin   // Запись младшего байта
-			case (lwb_adr_i[2:0])
-				3'b000:			// 24040
+			case (lwb_adr_i[3:0])
+				4'b0000:			// 24040
 					{rxdon, txrdy, skipb, stpac} <= lwb_dat_i[7:4];
-				3'b001:			// 24042
+				4'b0001:			// 24042
 					e_txcntb[7:0] <= lwb_dat_i[7:0];
-				3'b010:			// 24044
+				4'b0010:			// 24044
 					e_mdval[7:0] <= lwb_dat_i[7:0];
-				3'b011:			// 24046
+				4'b0011:			// 24046
 					e_mdctrl[6:0] <= lwb_dat_i[6:0];
-				3'b100: begin	// 24050
+				4'b0100: begin	// 24050
 					santm_res <= lwb_dat_i[7];
 					promis <= lwb_dat_i[6];
 					mcast <= lwb_dat_i[5];
 					eadr_mod[1:0] <= lwb_dat_i[4:3];
 					leds[2:0] <= lwb_dat_i[2:0];
 				end
-//				3'b110: begin	// 24054
+//				4'b0110: begin	// 24054
 //				end
-//				3'b111: begin	// 24056
+//				4'b0111: begin	// 24056
 //				end
 			endcase
 		end
 		if(lwb_sel_i[1] == 1'b1) begin    // Запись старшего байта
-			case (lwb_adr_i[2:0])
-				3'b001:	// 24042
+			case (lwb_adr_i[3:0])
+				4'b0001:	// 24042
 					e_txcntb[10:8] <= lwb_dat_i[10:8];
-				3'b010:	// 24044
+				4'b0010:	// 24044
 					e_mdval[15:8] <= lwb_dat_i[15:8];
 			endcase
 		end
