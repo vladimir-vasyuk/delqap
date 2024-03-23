@@ -1,5 +1,6 @@
 //=================================================================================
 // Реализация контроллера Ethernet на основе приемо-передатчика RTL8211EG
+// Основной модуль Ethernet
 //=================================================================================
 module ether(
 	input				rst_i,		// Сброс
@@ -12,7 +13,7 @@ module ether(
 	output [10:0]	rxcntb_o,	// Счетчик данных приема (байт)
 	output			erxwrn_o,	// Сигнал записи
 	output			rxclkb_o,	// Синхросигнал канала приема (запись в буферную память)
-	output [6:0]	sts_errs_o,	// статус и ошибки приема/передачи
+	output [7:0]	sts_errs_o,	// статус и ошибки приема/передачи
 //	input  [47:0]	macbus,		// MAC адрес
 //
 	input				e_rxc,		// Синхросигнал канала приема
@@ -61,13 +62,10 @@ wire			rxrdy;		// Данные приняты
 wire			txdone;		// Передача завершена 
 assign crs_err = (e_rxer & (~e_rxdv))? 1'b1 : 1'b0;
 assign rx_errg = loop? rx_err : (rx_err | ~md_status[0] | ~md_status[1]);
-assign sts_errs_o = {rxrdy, txdone, crs_err, mdc_err, tx_errg, rx_errg, rx_crc_err};
+assign sts_errs_o = {e_crs, rxrdy, txdone, crs_err, mdc_err, tx_errg, rx_errg, rx_crc_err};
 
 //================ Синхронизация ====================//
-wire			loop;				// Combined loop
-//wire			ext_loop;		// External loop
-//wire			int_loop;		// Internal loop
-//wire			inte_loop;		// IntExt loop
+wire			loop;				// Сигнал работы петли
 wire			mcast;			// Режим широковещания разрешен
 wire			promis;			// Режим прослушивания разрешен
 wire			rxdonel;			// Сигнал подтверждения приема
@@ -78,9 +76,6 @@ synchonize synch(
 	.clk_i(e_rxc),
 	.ethmode_i(ethmode_i),
 	.rx_ena_o(rx_enable),
-//	.int_loop_o(int_loop),
-//	.inte_loop_o(inte_loop),
-//	.ext_loop_o(ext_loop),
 	.skipb_o(skipb),
 	.mcast_o(mcast),
 	.promis_o(promis),
@@ -203,13 +198,6 @@ crc_n crc_tx(
    .crc_en(crcentx),
    .crc_out(crctx)
 );
-//crc crc_tx(
-//	.clk(txclkl),
-//	.reset(crcretx),
-//	.data_in(txdb),
-//	.enable(crcentx),
-//	.crc(crctx)
-//);
 
 //===== Контрольная сумма данных канала приема =====//
 crc_n crc_rx(
@@ -219,13 +207,6 @@ crc_n crc_rx(
    .crc_en(crcenrx),
    .crc_out(crcrx)
 );
-//crc crc_rx(
-//	.clk(rxclkl),
-//	.reset(crcrerx),
-//	.data_in(rxdbl),
-//	.enable(crcenrx),
-//	.crc(crcrx)
-//);
 
 //================ Блок управления =================//
 mdc mdcm(
@@ -242,14 +223,11 @@ mdc mdcm(
 
 endmodule
 
-
+//============= Блок синхронизации =================//
 module synchonize(
 	input				clk_i,
 	input  [9:0]	ethmode_i,
 	output			rx_ena_o,
-//	output			int_loop_o,
-//	output			inte_loop_o,
-//	output			ext_loop_o,
 	output			skipb_o,
 	output			txrdy_o,
 	output			rxdone_o,
@@ -271,7 +249,7 @@ assign txrdy_o = txrdy_r[1];
 assign rxdone_o = rxdn_r[1];
 assign mcast_o = mcast_r[1];
 assign promis_o = promis_r[1];
-assign loop_o = int_loop_o | inte_loop_o | setup_o;
+assign loop_o = int_loop_o | inte_loop_o | setup_o | ext_loop_o;
 
 always @(posedge clk_i) begin
 	rx_ena_r[0] <= ethmode_i[0]; rx_ena_r[1] <= rx_ena_r[0];
