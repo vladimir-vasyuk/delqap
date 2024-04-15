@@ -234,7 +234,7 @@ bus_int inter(
 //************************************************
 reg			rxdon;		// Данные приняты
 reg			txrdy;		// Данные готовы к передаче
-reg			stpac;		// Установочный пакет (setup)
+reg			stpac;		// Конфигурационный пакет (setup)
 reg			skipb;		// Пропуск байта
 reg			mcast;		// Режим широковещания
 reg			promis;		// Режим прослушивания
@@ -246,7 +246,8 @@ wire			bdrom;		// Загрузка BDROM
 assign intmode = (~csr_il) & (~csr_el) & (~csr_re);
 assign intextmode = (~csr_il) & csr_el & (~csr_re) & (~csr_bd);
 assign extmode = csr_il & csr_el & (~csr_re);
-assign rxmode = csr_re & (~csr_rl);
+//assign rxmode = csr_re & (~csr_rl);
+assign rxmode = csr_re;
 assign bdrom = (~csr_il) & csr_el & (~csr_re) & csr_bd;
 
 wire [7:0]	e_mode;			// Регистр режима работы 				-- 24040
@@ -506,8 +507,18 @@ end
 // Сброс и запись регистров
 always @(posedge lwb_clk_i, posedge comb_res) begin
    if(comb_res) begin 
-		// Сброс регистров MD
-		e_mdctrl <= 7'b0;
+		e_mdctrl <= 7'b0;		// регистр управления MD
+		rxdon <= 1'b0; 		// флвг принятых данных
+		txrdy <= 1'b0; 		// флаг готовности данных передачи
+		skipb <= 1'b0; 		// флаг пропуска байта
+		stpac <= 1'b0;			// флаг setup-пакета
+		mcast <= 1'b0;			// флаг широковещания
+		promis <= 1'b0;		// флаг прослушивания
+		leds <= 3'b0;			// регистр индикации
+		eadr_mod <= 2'b11;	// регистр адресной шины ethernet
+		santm_res <= 1'b0;	// регистр генерации BDCOK
+		e_txcntb <= 11'b0;	// регистр кол-ва байт передачи
+		e_mdval <= 16'b0;		// регистр данных MD
 	end
 	else if (lewr_req == 1'b1) begin
 		if (lwb_sel_i[0] == 1'b1) begin   // Запись младшего байта
