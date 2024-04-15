@@ -181,7 +181,7 @@ wire [7:0]  md_status;
 wire ereset;
 ethreset ethrstm(
    .clk(wb_clkp_i),
-   .rst(comb_res),
+   .rst(wb_rst_i),
    .e_reset(ereset)
 );
 
