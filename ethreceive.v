@@ -98,7 +98,8 @@ always@(negedge clk, posedge clr) begin
 			end
 			SPD_D5: begin		// Принять байт разделитель (0xd5)
 				if(rxer == 1'b0) begin
-					if((datain[7:0] == 8'hd5) && (rxdv == 1'b1) && (rxer == 1'b0)) begin
+//					if((datain[7:0] == 8'hd5) && (rxdv == 1'b1) && (rxer == 1'b0)) begin
+					if((datain[7:0] == 8'hd5) && (rxdv == 1'b1)) begin
 						ic <= 3'd0; rx_state <= RX_DATA;
 					end
 					else begin
@@ -132,7 +133,8 @@ always@(negedge clk, posedge clr) begin
 								rxwrn <= 1'b0;							// ... запрет записи в буферную память.
 							end
 							2'o1: begin
-								rxbdata <= {bufdat[7:0], datain[7:0]};	// ... данные на шину буферной памяти, ...
+//								rxbdata <= {bufdat[7:0], datain[7:0]};	// ... данные на шину буферной памяти, ...
+								rxbdata <= {datain[7:0], bufdat[7:0]};	// ... данные на шину буферной памяти, ...
 								rxwrn <= 1'b1;							// ... разрешение записи в буферную память, ...
 								bc <= 2'o0;								// ... инкремент счетчика байтов, ...
 								rxbaddr <= rxbaddr + 1'b1;			// ... инкремент регистра адреса ...
@@ -149,7 +151,8 @@ always@(negedge clk, posedge clr) begin
 			RX_LAST: begin
 				case(bc)
 					2'o1: begin											// Если есть не записанные данные...
-						rxbdata <= {bufdat[7:0], 8'b0};			// ... записать 
+//						rxbdata <= {bufdat[7:0], 8'b0};			// ... записать 
+						rxbdata <= {8'b0,bufdat[7:0]};			// ... записать 
 						rxwrn <= 1'b1;
 						bc <= 2'o0;
 					end
