@@ -37,7 +37,8 @@ reg  [3:0]	dma_op;			// регистры операции                       
 reg  [15:0]	dma_wcount;		// кол-во слов передачи                     -- 24022
 reg  [15:1]	dma_lad;			// локальный адрес памяти                   -- 24024
 reg  [21:1]	dma_haddr;		// физический адрес памяти                  -- 24026/24030 (low/high)
-reg  [5:0]  bus_wait;		// таймер ожидания ответа при DMA-обмене    -- 24032
+reg  [5:0]  ibus_wait;		// таймер ожидания ответа при DMA-обмене    -- 24032
+reg  [5:0]  bus_wait;		// текущее знвчение таймера ожидания
 reg  [15:0] data_index;		// указатель текущего слова
 reg			nxm;				// признак таймаута шины
 reg			iocomplete;		// признак завершения работы DMA-контроллера
@@ -78,16 +79,14 @@ assign bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o;	// строб цикла ш
 assign bus_read_req = bus_strobe & ~wb_we_i;				// запрос чтения
 assign bus_write_req = bus_strobe & wb_we_i;				// запрос записи
 
-reg			ack;
-always @(posedge clk_i)
-   if (wb_stb_i & wb_cyc_i)
-		ack <= 1'b1;
-   else
-		ack <= 1'b0;
-assign wb_ack_o = ack & wb_stb_i;
+always @(posedge clk_i) begin
+	ack[0] <= wb_cyc_i & wb_stb_i;
+	ack[1] <= wb_cyc_i & ack[0];
+end
+assign wb_ack_o = wb_cyc_i & wb_stb_i & ack[1];
 
 
-always @(posedge clk_i)  begin
+always @(posedge clk_i, posedge rst_i)  begin
    if (rst_i) begin
    // сброс
       dma_state <= dma_idle; 
@@ -99,8 +98,10 @@ always @(posedge clk_i)  begin
       dma_haddr <= 21'b0;
       dma_lad <= 15'b0;
 		dma_wcount <= 16'hFFFF;
+		dma_op <= 4'b0;
+		ibus_wait<= 6'b111111;
    end
-      
+
    // рабочие состояния
    else  begin
 		// Работа с внутренней шиной
@@ -117,7 +118,7 @@ always @(posedge clk_i)  begin
 				3'b100:	//24030
 					wb_dat <= {10'b0, dma_haddr[21:16]};
 				3'b101:	//24032
-					wb_dat <= {10'b0, bus_wait[5:0]};
+					wb_dat <= {10'b0, ibus_wait[5:0]};
 			endcase
 		end
 		else if (bus_write_req == 1'b1) begin
@@ -134,7 +135,7 @@ always @(posedge clk_i)  begin
 					3'b100:	//24030
 						dma_haddr[21:16] <= wb_dat_i[5:0];
 					3'b101:	//24032
-						bus_wait <= wb_dat_i[5:0];
+						ibus_wait <= wb_dat_i[5:0];
 				endcase
 			end
 			if (wb_sel_i[1] == 1'b1) begin    // Запись старшего байта
@@ -176,7 +177,7 @@ always @(posedge clk_i)  begin
          dma_read_prep: begin
             dma_we <= 1'b0;
             dma_stb <= 1'b0;
-            bus_wait <= 6'b111111;								// взводим таймер ожидания шины
+            bus_wait <= ibus_wait;								// взводим таймер ожидания шины
             dma_state <= dma_read;								// переходим к чтению
          end
 
@@ -224,7 +225,7 @@ always @(posedge clk_i)  begin
          dma_write_prep: begin
             dma_we <= 1'b0;
             dma_stb <= 1'b1;										// строб транзакции
-            bus_wait <= 6'b111111;								// взводим таймер ожидания шины
+            bus_wait <= ibus_wait;								// взводим таймер ожидания шины
             dma_state <= dma_write;
          end
 
@@ -265,8 +266,8 @@ always @(posedge clk_i)  begin
             end
             else iocomplete <= 1'b1;							// подтверждаем окончание обмена
          end
-      endcase 
+      endcase
    end
-end 
+end
 
 endmodule
