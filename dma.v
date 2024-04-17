@@ -4,8 +4,8 @@
 // Модуль DMA
 //=================================================================================
 module dma (
-   input					clk_i,      // тактовая частота шины
-   input					rst_i,      // сброс
+	input					clk_i,		// тактовая частота шины
+	input					rst_i,		// сброс
 // Внутренняя шина (доступ к регистрам)
 	input  [2:0]		wb_adr_i,	// адрес
 	input  [15:0]		wb_dat_i,	// входные данные
@@ -16,17 +16,17 @@ module dma (
 	input					wb_stb_i,	// строб цикла шины
 	output				wb_ack_o,	// подтверждение выбора устройства
 // Шина ПДП/DMA (передача данных)
-   output				dma_req_o,	// запрос DMA
-   input					dma_gnt_i,	// подтверждение DMA
+	output				dma_req_o,	// запрос DMA
+	input					dma_gnt_i,	// подтверждение DMA
 	output [21:0]		dma_adr_o,	// выходной адрес при DMA-обмене
-   input  [15:0]		dma_dat_i,	// входная шина данных DMA
-   output [15:0]		dma_dat_o,	// выходная шина данных DMA
-   output				dma_stb_o,	// строб цикла шины DMA
-   output				dma_we_o,	// направление передачи DMA (0 - память->модуль, 1 - модуль->память) 
-   input					dma_ack_i,	// Ответ от устройства, с которым идет DMA-обмен
-   input  [15:0]		lbdata_i,	// входная шина данных
-   output [15:0]		lbdata_o,	// выходная шина данных
-   output [15:1]		dma_lad_o,	// выходная шина адреса
+	input  [15:0]		dma_dat_i,	// входная шина данных DMA
+	output [15:0]		dma_dat_o,	// выходная шина данных DMA
+	output				dma_stb_o,	// строб цикла шины DMA
+	output				dma_we_o,	// направление передачи DMA (0 - память->модуль, 1 - модуль->память) 
+	input					dma_ack_i,	// Ответ от устройства, с которым идет DMA-обмен
+	input  [15:0]		lbdata_i,	// входная шина данных
+	output [15:0]		lbdata_o,	// выходная шина данных
+	output [15:1]		dma_lad_o,	// выходная шина адреса
 	output				dma_txmode_o,	// Сигнал мультиплексера адреса ПДП/DMA буфера передачи
 	output				dma_rxmode_o,	// Сигнал мультиплексера адреса ПДП/DMA буфера приема
 	output				dma_mode_o		// Обший сигнал работы в редиме ПДП/DMA
@@ -37,8 +37,8 @@ reg  [3:0]	dma_op;			// регистры операции                       
 reg  [15:0]	dma_wcount;		// кол-во слов передачи                     -- 24022
 reg  [15:1]	dma_lad;			// локальный адрес памяти                   -- 24024
 reg  [21:1]	dma_haddr;		// физический адрес памяти                  -- 24026/24030 (low/high)
-reg  [5:0]  ibus_wait;		// таймер ожидания ответа при DMA-обмене    -- 24032
-reg  [5:0]  bus_wait;		// текущее знвчение таймера ожидания
+reg  [5:0]	ibus_wait;		// таймер ожидания ответа при DMA-обмене    -- 24032
+reg  [5:0]	bus_wait;		// текущее знвчение таймера ожидания
 reg  [15:0] data_index;		// указатель текущего слова
 reg			nxm;				// признак таймаута шины
 reg			iocomplete;		// признак завершения работы DMA-контроллера
@@ -71,7 +71,7 @@ localparam[3:0] dma_write_prep = 5;
 localparam[3:0] dma_write = 6;
 localparam[3:0] dma_write_next = 7;
 localparam[3:0] dma_write_done = 8;
-reg  [3:0]  dma_state;
+reg  [3:0]	dma_state;
 
 // Сигналы упраления обменом с шиной
 wire			bus_strobe, bus_read_req, bus_write_req;
@@ -79,6 +79,7 @@ assign bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o;	// строб цикла ш
 assign bus_read_req = bus_strobe & ~wb_we_i;				// запрос чтения
 assign bus_write_req = bus_strobe & wb_we_i;				// запрос записи
 
+reg  [1:0]	ack;
 always @(posedge clk_i) begin
 	ack[0] <= wb_cyc_i & wb_stb_i;
 	ack[1] <= wb_cyc_i & ack[0];
