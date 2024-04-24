@@ -46,7 +46,7 @@ module extregs(
 	output			eth_txmd_o,	// сигнал мультиплексера адреса ethernet буфера передачи
 	output			eth_rxmd_o,	// сигнал мультиплексера адреса ethernet буфера приема
 // Sanity timer
-	output [1:0]	santm_o,
+	output			santm_o,
 // Indication
 	output [2:0]	dev_ind_o
 );
@@ -126,12 +126,18 @@ end
 assign let_ack = lwb_cyc_i & let_stb_i & etack[1];
 
 //************************************************
+// Переключатели режима
+wire			s3_n, s4_n;
+assign s3_n = ~s3_i;
+assign s4_n = ~s4_i;
+
+//************************************************
 // Регистр управления/состояния - csr - 174456
 //
 reg			csr_ri = 1'b0;		// 15	Receive Interrupt Request (RW1)
 //reg			csr_pe = 1'b0;		// 14	Parity Error in Memory (RO)
 wire			csr_ca;				// 13	Carrier from Receiver Enabled (RO)
-//reg			csr_ok = 1'b1;		// 12	Ethernet Transceiver Power OK (RO)
+//reg			csr_ok = 1'b1;		// 12	Ethernet Transceiver Power OK (RO) - replaced by link signal from MD
 //reg			csr_rr = 1'b0;		// 11	reserved
 reg			csr_se = 1'b0;		// 10	Sanity Timer Enable (RW)
 reg			csr_el = 1'b0;		// 09	External  Loopback (RW)
@@ -147,13 +153,13 @@ reg			csr_re = 1'b0;		// 00	Receiver Enable (RW)
 wire [15:0] csr;
 //assign csr_ca = (~csr_il)? 1'b0 : 1'b1;//(~errs[4]);
 assign csr_ca = (~csr_il)? 1'b0 : e_stse_i[7];
-assign csr = {csr_ri,1'b0,csr_ca,1'b1,1'b0,csr_se,csr_el,csr_il,csr_xi,csr_ie,csr_rl,csr_xl,csr_bd,csr_ni,csr_sr,csr_re};
+assign csr = {csr_ri,1'b0,csr_ca,e_mdstat_i[0],1'b0,csr_se,csr_el,csr_il,csr_xi,csr_ie,csr_rl,csr_xl,csr_bd,csr_ni,csr_sr,csr_re};
 
 //************************************************
 // Регистр адреса ветора - var - 174454
 //
 reg			var_ms;				// Mode select (RW) (After power-up reset reflect s3)
-//reg			var_os;				// Option switch (s4) settings (RO) (After power-up reset reflect s4)
+reg			var_os;				// Option switch (s4) settings (RO) (After power-up reset reflect s4)
 reg			var_rs = 1'b1;		// Request self-test (RW)
 reg			var_s3 = 1'b1;		// Self test status (RO)
 reg			var_s2 = 1'b1;		// Self test status (RO)
@@ -163,7 +169,7 @@ reg  [7:0]	var_iv;				// Interrupt vector
 reg			var_id = 1'b0;		// Identity test bit
 reg			blkreg = 1'b0;
 wire [15:0]	vareg;
-assign vareg = {var_ms,s4_i,var_rs,var_s3,var_s2,var_s1,var_iv[7:0],1'b0,var_id};
+assign vareg = {var_ms,var_os,var_rs,var_s3,var_s2,var_s1,var_iv[7:0],1'b0,var_id};
 
 //************************************************
 // Регистр адреса блока приема (RBDL) - 174444, 174446
@@ -271,22 +277,29 @@ reg			e_mdmux = 1'b0;// мультиплексер данных MD
 //		2:		1-MDI crossover; 0-MDI
 //		1:		1-приемник готов; 0-приемник не готов
 //		0:		1-связь есть; 0-связи нет
-
-// 24050 - регистр общего назначения
-// чтение - (bdrom, 8'b0,  promis, mcast, eadr_mod[1:0], leds[2:0])
-// запись - (8'b0, santm_res, promis, mcast, eadr_mod[1:0], leds[2:0])
-reg			santm_res;			// генерация BDCOK
-reg  [1:0]	eadr_mod;			// подключение к адресной шине ethernet
-reg  [2:0]	leds;					// индикация
-
-assign santm_o = {csr_se, santm_res};
-assign dev_ind_o = leds;
 assign e_txcntb_o = e_txcntb;
 assign e_mode_o = {promis, mcast, e_mode[7:0]};
 assign e_mdval_o = e_mdval;
 assign e_mdctrl_o = e_mdctrl;
 assign eth_rxmd_o = (stpac | extmode | intextmode | intmode | rxmode) & eadr_mod[1];
 assign eth_txmd_o = txrdy & eadr_mod[0];
+
+// 24050 - регистр общего назначения
+// чтение - (bdrom,6'b0,rbt_enav,stm_enav,promis,mcast,eadr_mod[1:0],leds[2:0])
+// запись - (6'b0,stm_res,1'b0,stm_ena,promis,mcast,eadr_mod[1:0],leds[2:0])
+reg			stm_res = 1'b0;	// генерация BDCOK
+reg			stm_ena;				// регистр разрешения sanity timer
+reg  [1:0]	eadr_mod;			// подключение к адресной шине ethernet
+reg  [2:0]	leds;					// индикация
+wire			stm_enav;			// разрешение sanity timer после сброса
+wire			rbt_enav;			// разрешение удаленной загрузки
+
+assign stm_enav = stm_ena | (~var_ms & s4_i);
+assign rbt_enav = var_ms & s4_i;
+assign santm_o = stm_res & stm_enav;
+assign dev_ind_o = leds;
+
+// 24060 - 24066 - регистр физического адреса модуля и контрольная сумма 
 
 
 //************************************************
@@ -366,13 +379,17 @@ always @(posedge lwb_clk_i) begin
 		csr_ri  <= 1'b0; csr_se <= 1'b0; csr_el <= 1'b0;
 		csr_il <= 1'b0; csr_xi <= 1'b0; csr_ie <= 1'b0; csr_rl <= 1'b1; csr_xl <= 1'b1;
 		csr_bd <= 1'b0; csr_ni <= 1'b0; csr_sr <= 1'b0; csr_re <= 1'b0;
+
 		// Сброс регистра вектора
 		if(~res_soft) begin	// Не программный сброс
-			var_id <= 1'b0; var_iv <= 8'o0; var_rs  <= 1'b1;
-			var_s3 <= 1'b1; var_s2 <= 1'b1; var_s1 <= 1'b1;
-			var_ms <= s3_i;// var_os <= s4_i;
+			var_ms <= s3_n; var_os <= s4_n & s3_n;
+			var_id <= 1'b0; var_iv <= 8'o0; var_rs  <= 1'b1 & s3_n;
+			var_s3 <= 1'b1 & s3_n; var_s2 <= 1'b1 & s3_n; var_s1 <= 1'b1 & s3_n;
 		end
-		// Сброс регистров MD
+		else
+			var_rs  <= 1'b0;
+
+		// Сброс регистра MD
 		e_mdmux <= 1'b0;
 	end
 	else begin
@@ -430,8 +447,11 @@ always @(posedge lwb_clk_i) begin
 						end
 						3'b110: begin  // Base + 14 - VAR
 							var_iv[7:6] <= ewb_dat_i[9:8];
-							var_rs <= ewb_dat_i[13];
+							var_rs <= ewb_dat_i[13] & var_ms;
 							var_ms <= ewb_dat_i[15];
+							if(~ewb_dat_i[15]) begin
+								{var_os,var_rs,var_s3,var_s2,var_s1} <= 5'b0;
+							end
 						end
 						3'b111: begin  // Base + 16 - CSR
 							csr_il <= ewb_dat_i[8];
@@ -476,7 +496,7 @@ always @(posedge lwb_clk_i) begin
 end
 
 //************************************************
-// Работа с регистрами ethernet
+// Работа с регистрами ethernet и регистром общего назначения
 // Чтение регистров
 always @(posedge lwb_clk_i) begin
 	if (lerd_req == 1'b1) begin
@@ -490,7 +510,7 @@ always @(posedge lwb_clk_i) begin
 			4'b0011:	// 24046
 				etdat <= {e_mdstat_i[7:0], 1'b0, e_mdctrl[6:0]};
 			4'b0100:	// 24050
-				etdat <= {bdrom, 8'b0, promis, mcast, eadr_mod[1:0], leds[2:0]};
+				etdat <= {bdrom, 6'b0, rbt_enav, stm_enav, promis, mcast, eadr_mod[1:0], leds[2:0]};
 //			4'b0110:	// 24054
 //			4'b0111:	// 24056
 			4'b1000:
@@ -516,9 +536,10 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 		promis <= 1'b0;		// флаг прослушивания
 		leds <= 3'b0;			// регистр индикации
 		eadr_mod <= 2'b11;	// регистр адресной шины ethernet
-		santm_res <= 1'b0;	// регистр генерации BDCOK
+		stm_res <= 1'b0;		// регистр генерации BDCOK
 		e_txcntb <= 11'b0;	// регистр кол-ва байт передачи
 		e_mdval <= 16'b0;		// регистр данных MD
+		stm_ena <= 1'b0;		// регистр разрешения sanity timer
 	end
 	else if (lewr_req == 1'b1) begin
 		if (lwb_sel_i[0] == 1'b1) begin   // Запись младшего байта
@@ -532,7 +553,7 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 				4'b0011:			// 24046
 					e_mdctrl[6:0] <= lwb_dat_i[6:0];
 				4'b0100: begin	// 24050
-					santm_res <= lwb_dat_i[7];
+					stm_ena <= lwb_dat_i[7];
 					promis <= lwb_dat_i[6];
 					mcast <= lwb_dat_i[5];
 					eadr_mod[1:0] <= lwb_dat_i[4:3];
@@ -550,6 +571,8 @@ always @(posedge lwb_clk_i, posedge comb_res) begin
 					e_txcntb[10:8] <= lwb_dat_i[10:8];
 				4'b0010:	// 24044
 					e_mdval[15:8] <= lwb_dat_i[15:8];
+				4'b0100: // 24050
+					stm_res <= lwb_dat_i[9];
 			endcase
 		end
 	end
