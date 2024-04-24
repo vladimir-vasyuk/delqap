@@ -366,7 +366,6 @@ bdl bdlm(
 	.wb_clk_i(lwb_clkp),
 	.wb_adr_i(lwb_adr[3:1]),
 	.wb_dat_i(lwb_out),
-//	.wb_dat_o(lbdl_dat),
 	.wb_cyc_i(lwb_cyc),
 	.wb_we_i(lwb_we),
 	.wb_sel_i(lwb_sel),
@@ -376,7 +375,6 @@ bdl bdlm(
 	.dma_adr_i(dma_lad[3:1]),
 	.dma_dat_i(mtxdbus),
 	.dma_we_i(ldma_we),
-//	.dma_dat_o(bdldat),
 	.bdl_dat_o(bdl_dat)
 );
 
@@ -437,14 +435,10 @@ assign e_mdc = md_clock;
 
 //************************************************
 // Sanity timer
-reg         s1;               // выбор адреса устройства
-wire pwse = s3 & s4;				// Sanity Timer разрешен при включении
-wire [1:0]	santm;				// Генерация BDCOK
-wire sanena = santm[1] | pwse;
+wire santm;				// Генерация BDCOK
 santim santmod(
 	.clock_i(md_clock),
-	.ena_i(sanena),
-	.gen_i(santm[0]),
+	.gen_i(santm),
 	.out_o(bdcok)
 );
 
