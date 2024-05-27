@@ -37,8 +37,8 @@ module extregs(
 	input				let_stb_i,	// строб выбора регистров ethernet
 	output [9:0]	e_mode_o,	// управляющие сигналы для модуля ethernet
 	input  [7:0]	e_stse_i,	// состояние модуля ethernet
-	output [10:0]	e_txcntb_o,	// кол-во байт каналы передачи
-	input	 [10:0]	e_rxcntb_i,	// кол-во байт каналы приема
+	output [10:0]	e_txcntb_o,	// кол-во байт канала передачи
+	input  [10:0]	e_rxcntb_i,	// кол-во байт канала приема
 	output [15:0]	e_mdval_o,	// данные для блока MDC
 	input  [15:0]	e_mdval_i,	// данные из блока MDC
 	output [6:0]	e_mdctrl_o,	// управляющие сигналы для блока MDC
