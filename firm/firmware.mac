@@ -50,6 +50,7 @@ RAMTOP	= 010000    ; Upper program limit
 ;---Buffers----
 RXBUF	= 10000	    ; Receive buffer address
 RXBSIZ	= 4000	    ; Size of buffer (words)
+RXMEB	= 14000     ; Buffer address for MEB ops.
 TXBUF	= 20000	    ; Transmit buffer address
 TXBSIZ	= 2000	    ; Size of buffer (words)
 ;
@@ -420,7 +421,8 @@ TXL$:	MOV	BDLL, 6(R2)	; Set to DMA address (low order bits)
 ;
 ; Check and process S-bit
 	BIT	#AD.S, 2(R1)	; Is the S-bit set?
-	BEQ	9$		; No - br to continue
+;	BEQ	9$		; No - br to continue
+	BEQ	10$		; No - br to continue
 8$:	BIS	#ET.STP,@#ECTST	; Yes - set S-bit in the emode register
 	NEG	R4		; 2-s complement of the byte count
 	MOV	R4, SETUPW	; Save copy to variable
@@ -431,10 +433,10 @@ TXL$:	MOV	BDLL, 6(R2)	; Set to DMA address (low order bits)
 ;
 ; STE bit in the TSW1 (timer was enabled via switch S4 at powerup,
 ; this bit is only valid in DEQNA-lock mode).
-9$:	MOV	@#LQAVAR, R0	; Get VAR value
-	BIC	#^C<UNLST>, R0	; Clear all except 15:14 bits
-	BNE	10$		; Condition not met, br to continue
-	BIS	#TS.1ES, STW1	; Condition met, set STE bit
+;9$:	MOV	@#LQAVAR, R0	; Get VAR value
+;	BIC	#^C<UNLST>, R0	; Clear all except 15:14 bits
+;	BNE	10$		; Condition not met, br to continue
+;	BIS	#TS.1ES, STW1	; Condition met, set STE bit
 ;
 ; E-bit
 10$:	BIT	#AD.E, 2(R1)	; Execute the packet?
@@ -642,7 +644,7 @@ RXL$:	MOV	BDLL, 6(R2)	; Set to DMA address (low order bits)
 	BIS	#UNLST, R0	; No - set "used" and not "last"
 	BR	10$
 9$:	BIS	#ET.RDD,@#ECTST	; yes - set "receive-done" bit ...
-	BIC	#UNLST, R0	; No - set "used" and not "last"
+	BIC	#UNLST, R0	; No - clear "used" and not "last"
 ;
 ; Calculate number of bytes, store and send status words
 10$:	MOV	R0, STW1
@@ -809,8 +811,8 @@ TSTMOD:	BIC	#<VR.S3!VR.S2!VR.S1>,@#LQAVAR ; Clear test bits
 	BCS	8$		; If error - br to processing
 	CALL	BDCHK		; Test BD ROM checksum
 	BCS	8$		; If error - br to processing
-	CALL	MDCINI		; Ethernet transceiver initialization
-	BCS	8$
+;	CALL	MDCINI		; Ethernet transceiver initialization
+;	BCS	8$
 ;
 2$:	CMPB	TSEC, STW2	; Just the delay
 	BNE	2$
@@ -1027,7 +1029,7 @@ MPRL$:	INC	R3		; Inc meb counter
 ; Read Ethernet Address
 MBREA:	BIC	#EA.RXB,@#DMAOP	; Set bus mode for RXBUF
 	MOV	#MACTAB, R4	; Physical address
-	MOV	#<RXBUF+600>,R5	; Storage address
+	MOV	#RXMEB,R5	; Storage address
 	MOV	#3, R0		; 3 words
 1$:	MOV	(R4)+, (R5)+	; Copy physical address ...
 	SOB	R0, 1$		; ... to the storage
@@ -1077,7 +1079,7 @@ MBTERM:	RETURN
 ; Inputs:
 ;	R0 - size (words)
 MBISND:
-	MOV	#<RXBUF+600>,@#DMALAD	; Local address to DMA reg
+	MOV	#RXMEB,@#DMALAD	; Local address to DMA reg
 	MOV	MEBAL, @#DMAHLA	; Host memeory address
 	MOV	MEBAH, @#DMAHHA	;
 	NEG	R0		;  2's compl. size
