@@ -14,12 +14,14 @@ module regf #(parameter NUM=6)
 	output [15:0]			q			// выходные данные
 );
 
-reg[15:0] x[NUM-1:0];
-assign q = x[addr];
+reg [15:0]	x[NUM-1:0];
+wire [NUM/2-1:0]	addrl;
+assign addrl = (addr < NUM)? addr : 0;
+assign q = x[addrl];
 
 always @(posedge clk) begin
    if(we) begin
-      x[addr] <= data;
+      x[addrl] <= data;
    end
 end
 endmodule
