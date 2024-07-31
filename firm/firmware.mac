@@ -106,8 +106,15 @@ EGMOD	= 24050
 ; write - {6'b0, santm_reset, 2'b0, promis, mcast, rxa_eth, txa_eth, led, led, led}
 ;--------------
 ESADR	= 24060     ; +3 - station address + checksum. RO
+;--------------
+; MAC address table
+EMACA	= 24120	    ; Address register
+EMAC1	= 24122     ; Low section bits
+EMAC2	= 24124     ; Middle section bits
+EMAC3	= 24126     ; High section bits
 ;
-	.SBTTL	- Bit definitions
+
+.SBTTL	- Bit definitions
 ;===========================================================================
 ; General bit definitions
 ;---------------------------------------------------------------------------
@@ -309,7 +316,6 @@ START:
 	MOV	#36., R5	; Number of the rest words
 3$:	CLR	(R4)+		; Clear rest ...
 	SOB	R5, 3$		; ... entries
-
 ;.IF NE ECTMOP
 ; Init system message values and first MAC table entry
 	MOV	#ESADR, R4	; Address of the SA ROM
@@ -339,8 +345,13 @@ START:
 ;	CALL	MDCINI		; Init ethernet transceiver
 ;	BCC	10$
 ;	HALT			; !!! Error !!!
+; Init DELQA MAC table
+10$:	BIS	#ET.STP,@#ECTST	; Set S-bit in the emode register
+	CALL	ETHTBP
+	BIC	#ET.STP,@#ECTST	; Clear S-bit in the emode register
 ; Final initialization
-10$:	MOV	#BDLADR, R1	; Initial BDL local address to R1
+20$:
+	MOV	#BDLADR, R1	; Initial BDL local address to R1
 	MOV	#DMAOP, R2	; DMAOP address to R2
 	MOV	#LQACSR, R3	; LQACSR address to R3
 	MOV	#177777, @R1	; Init first BDL word
@@ -529,18 +540,12 @@ RXP:
 ;.ENDC
 ;
 2$:	BIT	#CS.RL, @R3	; Check RL-bit
-	Beq	6$		; RL=1 - abort processing
+	BEQ	10$		; RL=1 - abort processing
 
 4$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
 	BIS	#ET.RDD,@#ECTST	; RL=1 - set "receive-done" bit ...
 	RETURN			; ... and return
 ;
-6$:	BIT	#ET.STP, RECTST	; Setup?
-	BNE	10$		; Yes - br to packer processing
-	BIT	#ET.PRM,@#EGMOD	; Check MAC?
-	BEQ	10$		; No - br to continue
-	CALL	CMPMAC		; Yes - check it
-	BCS	2$		; Not matched - return
 10$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
 ;-----------------------------------------------
 ; Packet processing starts here
@@ -992,6 +997,18 @@ ETHTAB:	MOV	#MACTAB, MTADR
 	MOV	R2, MTADR
 	ADD	#20, R1		; Shift in the setup block
 	SOB	R5, 10$		; Loop
+;
+ETHTBP:	MOV	#13., R0	; MACs counter
+	MOV	#MACTAB, R1	; Local table address entry
+	CLR	R2		; Initial MAC table address value
+	MOV	#EMACA, R3	; DELQA MAC table address
+20$:	MOV	R2, (R3)	; Write address
+	MOV	(R1)+, 2(R3)	; Write low address section
+	MOV	(R1)+, 4(R3)	; Write middle address section
+	MOV	(R1)+, 6(R3)	; Write high address section
+	INC	R2		; Point to next table value
+	SOB	R0, 20$		; Loop
+	MOV	#0, (R3)	; Clear address
 	RETURN
 ;
 	.SBTTL	- MEB processing
@@ -1095,35 +1112,6 @@ MBISND:
 SNTRES:
 	MOV	SNTVAL, SNTCV	; Set initial value
 	CLRB	SNTCK
-	RETURN
-;
-	.SBTTL	- Compare MAC addresses
-;===========================================================================
-;
-CMPMAC:
-	MOV	R1, -(SP)
-	MOV	R2, -(SP)
-	MOV	R3, -(SP)
-	MOV	#14., R5
-	MOV	#MACTAB, R2
-1$:	MOV	#RXBUF, R4
-	MOV	R2, R3
-	CLR	R0		; Init success counter
-	MOV	#3, R1
-2$:	CMP	(R4)+, (R3)+
-	BNE	3$
-	INC	R0
-	SOB	R1, 2$
-	CMP	#3, R0
-	BEQ	4$
-3$:	ADD	#6, R2
-	SOB	R5, 1$
-	SEC
-	BR	5$
-4$:	CLC
-5$:	MOV	(SP)+, R3
-	MOV	(SP)+, R2
-	MOV	(SP)+, R1
 	RETURN
 ;
 	.SBTTL	- Init ethernet transceiver
@@ -1261,8 +1249,6 @@ ECTPR:	MOV	RXBUF+16, R0	; Get skipCount
 	MOV	R4, R5		; Copy to R5
 	BIT	#BT.00, (R4)	; Multicast or broadcast frame?
 	BNE	1$		; Yes - br to reply
-	CALL	CMPMAC		; No  - check SA
-	BCS	4$		; Not matched - return
 ;
 1$:	MOV	R5, R4
 	ADD	#22, R5		; Shift to the destination MAC address
