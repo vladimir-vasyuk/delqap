@@ -14,8 +14,7 @@ module ether(
 	output			erxwrn_o,	// Сигнал записи
 	output			rxclkb_o,	// Синхросигнал канала приема (запись в буферную память)
 	output [7:0]	sts_errs_o,	// статус и ошибки приема/передачи
-//	input  [47:0]	macbus,		// MAC адрес
-//
+
 	input				e_rxc,		// Синхросигнал канала приема
 	input				e_rxdv,		// Сигнал готовности данных канала приема
 	input				e_rxer,		// Ошибка канала приема
@@ -33,7 +32,12 @@ module ether(
 	input  [6:0]	md_ctrl,		// Блок управления - сигналы управления от компьютера
 	input  [15:0]	md_val,		// Блок управления - данные записи
 	output [15:0]	md_out,		// Блок управления - данные чтения
-	output [7:0]	md_status	// Блок управления - данные состояния
+	output [7:0]	md_status,	// Блок управления - данные состояния
+
+	output			mac_rdy,
+	output [47:0]	mac_data,
+	input				cmp_done,
+	input				cmp_res
 );
 
 assign e_rst = ~rst_i;
@@ -181,13 +185,16 @@ ethreceive ethrcvm(
    .rxbdata(erxdbus_o),
    .rxwrn(erxwrn_o),
    .rxrdy(rxrdy),
-// .mymac(macbus),
    .rxdone(rxdonel),
    .crc(crcrx),
    .crcen(crcenrx),
    .crcre(crcrerx),
    .err_gen(rx_err),
-   .err_crc(rx_crc_err)
+   .err_crc(rx_crc_err),
+	.mac_data(mac_data),
+	.mac_rdy(mac_rdy),
+	.cmp_done(cmp_done),
+	.cmp_res(cmp_res)
 );
 
 //==== Контрольная сумма данных канала передачи ====//

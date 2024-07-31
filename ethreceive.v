@@ -21,7 +21,11 @@ module ethreceive(
 	output reg			crcen,		// Cигнал разрешения вычисления CRC
 	output reg			crcre,		// Cигнал сброса CRC
 	output				err_gen,		// Сигнал общей ошибки
-	output				err_crc		// Сигнал ошибки CRC
+	output				err_crc,		// Сигнал ошибки CRC
+	output [47:0]		mac_data,
+	output				mac_rdy,
+	input					cmp_done,
+	input					cmp_res
 );
 
 reg  [2:0]	ic;				// Счетчик
@@ -30,8 +34,11 @@ reg  [47:0]	recmac;			// Принятый MAC адрес
 reg  [7:0]	bufdat;			// Буфер принятых данных
 reg			rx_gen_error;	// Сигнал общей ошибки
 reg			rx_crc_error;	// Сигнал ошибки CRC
+reg  [5:0]	sigwait;				// таймер ожидания
 
 assign {err_gen, err_crc} = {rx_gen_error, rx_crc_error};
+assign mac_data = recmac;
+assign mac_rdy = ic[2] & ic[1] & ~ic[0];
 
 // Конечный автомат канала приема
 localparam IDLE		= 3'd0;
@@ -40,7 +47,8 @@ localparam SPD_D5		= 3'd2;
 localparam RX_DATA	= 3'd3;
 localparam RX_LAST	= 3'd4;
 localparam RX_CRC		= 3'd5;
-localparam RX_FINISH	= 3'd6;
+localparam CHK_MAC	= 3'd6;
+localparam FINISH		= 3'd7;
 reg  [3:0]  rx_state;
 
 initial
@@ -67,6 +75,7 @@ always@(negedge clk, posedge clr) begin
 				rxwrn <= 1'b0;											// Сброс сигнала разрешения записи
 				ic <= 3'o0;												// Сброс счетчика
 				bc <= 2'o0;												// Сброс счетчика байтов
+				sigwait <= 6'b111111;
 				if((rxdv == 1'b1) && (rxena == 1'b1)) begin	// Признак принятых данныхи и сигнал разрешения приема
 					if(datain[7:0] == 8'h55) begin				// Данные преамбулы (0x55)?
 						rx_gen_error <= 1'b0;						// Сброс сигнала общей ошибки
@@ -123,7 +132,8 @@ always@(negedge clk, posedge clr) begin
 					if(rxdv == 1'b1) begin							// Есть разрешение приема данных?
 						rxcntb <= rxcntb + 1'd1;					// Да- инкремент счетчика принятых данных.
 						if(ic < 3'd6) begin							// Меньше 6 байт?
-							recmac <= {recmac[39:0], datain[7:0]};	// Да - формирование MAC адреса назначения, ...
+//							recmac <= {recmac[39:0], datain[7:0]};	// Да - формирование MAC адреса назначения, ...
+							recmac <= {datain[7:0], recmac[47:8]};	// Да - формирование MAC адреса назначения, ...
 							ic <= ic + 1'd1;								// ... инкремент счетчика.
 						end
 						case(bc)
@@ -163,13 +173,26 @@ always@(negedge clk, posedge clr) begin
 				endcase
 			end
 			RX_CRC: begin		// Проверка CRC
-				rx_state <= RX_FINISH;								// На завершение
+				rx_state <= CHK_MAC;									// На завершение
 				rxcntb <= rxcntb - 11'd4;							// Минус 4 байта (CRC)
 				if(crc != 32'hC704DD7B) begin						// CRC верен?
 					rx_crc_error <= 1'b1;							// Нет - установить сигнал ошибки
 				end
 			end
-			RX_FINISH: begin
+			CHK_MAC: begin
+				if(cmp_done) begin
+					if(cmp_res)
+						rx_state <= FINISH;
+					else
+						rx_state <= IDLE;
+				end
+				else begin
+					sigwait <= sigwait -1'b1;
+					if(|sigwait == 1'b0)
+						rx_state <= IDLE;
+				end
+			end
+			FINISH: begin
 				if(rxdone == 1'b1) begin							// Прием завершен?
 					rxrdy <= 1'b0;										// Да, сброс сигнала завершения приема
 					rx_state <= IDLE;									// Переход в состояние ожидания

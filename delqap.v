@@ -177,6 +177,10 @@ wire [15:0]	md_val_i;
 wire [15:0] md_val_o;
 wire [6:0]  md_ctrl;
 wire [7:0]  md_status;
+wire			mac_rdy;		// 
+wire [47:0]	mac_data;	//
+wire			cmp_done;	// 
+wire			cmp_res;		// 
 
 wire ereset;
 ethreset ethrstm(
@@ -197,7 +201,6 @@ ether etherm(
    .erxwrn_o(erxwe),
    .rxclkb_o(rxclkb),
 	.sts_errs_o(estse),
-// .macbus(mymac),
    .e_rxc(e_rxc),
    .e_rxdv(e_rxdv),
    .e_rxer(e_rxer),
@@ -215,7 +218,11 @@ ether etherm(
    .md_ctrl(md_ctrl),
    .md_val(md_val_o),
    .md_out(md_val_i),
-   .md_status(md_status)
+   .md_status(md_status),
+	.mac_rdy(mac_rdy),
+	.mac_data(mac_data),
+	.cmp_done(cmp_done),
+	.cmp_res(cmp_res)
 );
 
 //*******************************************************************
@@ -252,6 +259,7 @@ wire			leth_stb;
 wire			lrxb_stb;
 wire			ltxb_stb;
 wire			lbdl_stb;
+wire			lcmp_stb;
 
 // линии подтверждения обмена
 wire			lfrm_ack;
@@ -260,6 +268,7 @@ wire			lreg_ack;
 wire			lrxb_ack;
 wire			ltxb_ack;
 wire			lbdl_ack;
+wire			lcmp_ack;
 
 // шины данных от периферии к процессору
 wire [15:0]	lfrm_dat;
@@ -267,6 +276,7 @@ wire [15:0]	ldma_dat;
 wire [15:0]	lreg_dat;
 wire [15:0]	lrxb_dat;
 wire [15:0]	ltxb_dat;
+wire [15:0]	lcmp_dat;
 
 //*******************************************************************
 // Модуль формирования сбросов 
@@ -324,7 +334,8 @@ end
 //******************************************************************* 
 assign lprg_stb = lwb_stb & lwb_cyc & (lwb_adr[15:12] == 4'b0000);					// RAM 000000-010000
 assign lrom_stb = lwb_stb & lwb_cyc & (lwb_adr[15:12] == 4'b1110);					// ROM 160000-167777
-assign lerg_stb = lwb_stb & lwb_cyc & (lwb_adr[15:5] == 11'b00101000010);			// внешние регистры - 24100 - 24136
+assign lcmp_stb = lwb_stb & lwb_cyc & (lwb_adr[15:4] == 12'b001010000101);			// регистры MAC - 24120 - 24136
+assign lerg_stb = lwb_stb & lwb_cyc & (lwb_adr[15:4] == 12'b001010000100);			// внешние регистры - 24100 - 24116
 assign lrxb_stb = lwb_stb & lwb_cyc & (lwb_adr[15:12] == 4'b0001);					// буфер данных канала приема (10000 - 20000)
 assign ltxb_stb = lwb_stb & lwb_cyc & (lwb_adr[15:11] == 5'b00100);					// буфер данных канала передачи (20000 - 24000)
 assign ldma_stb = lwb_stb & lwb_cyc & (lwb_adr[15:4] == 12'b001010000001);			// регистры ПДП/DMA 24020 - 24036
@@ -332,7 +343,7 @@ assign leth_stb = lwb_stb & lwb_cyc & (lwb_adr[15:5] == 11'b00101000001);			// e
 assign lbdl_stb = lwb_stb & lwb_cyc & (lwb_adr[15:4] == 12'b001010000000);			// регистры BDL (24000-24016)
 
 // Сигналы подтверждения - собираются через OR со всех устройств
-assign lwb_ack	= lfrm_ack | lreg_ack | ldma_ack | lrxb_ack | ltxb_ack | lbdl_ack;
+assign lwb_ack	= lfrm_ack | lreg_ack | ldma_ack | lrxb_ack | ltxb_ack | lbdl_ack | lcmp_ack;
 
 assign lfrm_stb = lprg_stb | lrom_stb;
 assign lreg_stb = lerg_stb | leth_stb;
@@ -343,6 +354,7 @@ assign lwb_mux	= (lfrm_stb ? lfrm_dat : 16'o000000)
 					| (lreg_stb ? lreg_dat : 16'o000000)
 					| (lrxb_stb ? lrxb_dat : 16'o000000)
 					| (ltxb_stb ? ltxb_dat : 16'o000000)
+					| (lcmp_stb ? lcmp_dat : 16'o000000)
 ;
 
 //*******************************************************************
@@ -418,6 +430,27 @@ extregs eregs(
 	.eth_rxmd_o(eth_rxmode),
 	.santm_o(santm),
 	.dev_ind_o(indic)
+);
+
+//*******************************************************************
+//* Модуль сравнения MAC адресов
+wire [2:0] epms = {emode[9], emode[8], emode[4]};
+cmpmac cmpm(
+	.wb_clk_i(lwb_clkp),
+	.wb_adr_i(lwb_adr[3:1]),
+	.wb_dat_i(lwb_out),
+	.wb_dat_o(lcmp_dat),
+	.wb_cyc_i(lwb_cyc),
+	.wb_we_i(lwb_we),
+	.wb_stb_i(lcmp_stb),
+	.wb_sel_i(lwb_sel),
+	.wb_ack_o(lcmp_ack),
+	.eth_pms_i(epms),
+	.eth_clk_i(e_rxc),
+	.eth_macr_i(mac_rdy),
+	.eth_macd_i(mac_data),
+	.cmp_done_o(cmp_done),
+	.cmp_res_o(cmp_res)
 );
 
 
