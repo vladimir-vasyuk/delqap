@@ -350,8 +350,7 @@ START:
 	CALL	ETHTBP
 	BIC	#ET.STP,@#ECTST	; Clear S-bit in the emode register
 ; Final initialization
-20$:
-	MOV	#BDLADR, R1	; Initial BDL local address to R1
+20$:	MOV	#BDLADR, R1	; Initial BDL local address to R1
 	MOV	#DMAOP, R2	; DMAOP address to R2
 	MOV	#LQACSR, R3	; LQACSR address to R3
 	MOV	#177777, @R1	; Init first BDL word
@@ -802,8 +801,8 @@ TXSYSM:	MOV	@#ECTST, R0
 ;
 TSTMOD:	BIC	#<VR.S3!VR.S2!VR.S1>,@#LQAVAR ; Clear test bits
 	BIS	#1, @#LQABAS	; Block external bus access
-;	BIS	#EA.LED,@#EGMOD	; Set indication
-; 5 sec delay
+	BIS	#EA.LED,@#EGMOD	; Set indication
+; 2 sec delay
 	MOVB	TSEC, R0	; Calculate 2 seconds ...
 	ADD	#2, R0		; ... time shift for the ...
 	CMP	R0, #60.	; ... delay purpose ...
@@ -815,6 +814,8 @@ TSTMOD:	BIC	#<VR.S3!VR.S2!VR.S1>,@#LQAVAR ; Clear test bits
 	CALL	SACHK		; Test SA ROM checksum
 	BCS	8$		; If error - br to processing
 	CALL	BDCHK		; Test BD ROM checksum
+	BCS	8$		; If error - br to processing
+	CALL	MCMTST		; Test MAC memory block
 	BCS	8$		; If error - br to processing
 ;	CALL	MDCINI		; Ethernet transceiver initialization
 ;	BCS	8$
@@ -998,7 +999,7 @@ ETHTAB:	MOV	#MACTAB, MTADR
 	ADD	#20, R1		; Shift in the setup block
 	SOB	R5, 10$		; Loop
 ;
-ETHTBP:	MOV	#13., R0	; MACs counter
+ETHTBP:	MOV	#14., R0	; MACs counter
 	MOV	#MACTAB, R1	; Local table address entry
 	CLR	R2		; Initial MAC table address value
 	MOV	#EMACA, R3	; DELQA MAC table address
@@ -1466,6 +1467,64 @@ BDCHK:	MOV	R1, -(SP)
 11$:	MOV	(SP)+, R1
 	RETURN
 ;
+	.SBTTL	- MAC memory check
+;===========================================================================
+; MAC memory test (very simple running "1" test)
+;
+MCMTST:	MOV	R3, -(SP)
+	MOV	R2, -(SP)
+	MOV	R1, -(SP)
+	BIS	#ET.STP,@#ECTST	; Set S-bit in the emode register
+; Store values to the temporary storage area
+	MOV	#14., R5
+	MOV	#MACTAB, R4	; Local table address entry
+	MOV	#EMACA, R3	; DELQA MAC table address
+	CLR	R2		; Initial MAC table address value
+1$:	MOV	R2, (R3)	; Set address
+	MOV	2(R3), (R4)+	; Store low address section
+	MOV	4(R3), (R4)+	; Store middle address section
+	MOV	6(R3), (R4)+	; Store high address section
+	INC	R2		; Point to next table value
+	SOB	R5, 1$		; Loop
+;
+	MOV	#MACVAL, R5	; Temporary vales ares
+	CLR	(R5)		; Address = 0
+	MOV	#14., R3	; Number of values to check
+2$:	MOV	#48., R4	; Number of bits to check
+	MOV	#1, R0		; Low section initial value
+	CLR	R1		; Middle section initial value
+	CLR	R2		; High section initial value
+	MOV	(R5)+, @#EMACA	; Set address register
+4$:	MOV	R0, @#EMAC1	; Set low section
+	MOV	R1, @#EMAC2	; Set middle section
+	MOV	R2, @#EMAC3	; Set high section and write the value
+	MOV	@#EMAC1, (R5)+	; Read low section
+	MOV	@#EMAC2, (R5)+	; read middle section
+	MOV	@#EMAC3, (R5)	; Read high section
+	CMP	(R5), R2	; Compare high section values
+	BNE	10$		; Not equal - br to error
+	CMP	-(R5), R1	; Compare middle section values
+	BNE	10$		; Not equal - br to error
+	CMP	-(R5), R0	; Compare low section values
+	BNE	10$		; Not equal - br to error
+	ASHC	#1, R0		; Shift "1"
+	ADC	R2		; "1" to high section (if exists) ...
+	ASL	R2		; ... and shift
+	SOB	R4, 4$		; Bits loop
+	INC	-(R5)		; Next address
+	SOB	R3, 2$		; Values loop
+	CLC			; Clear error indication
+	BR	12$		; Br to normal return
+10$:	SEC			; Set error indication
+	BIS	#VR.S1,@#LQAVAR	; Set error bit (LANCE test)
+; Restore values
+12$:	CALL	ETHTBP
+	BIC	#ET.STP,@#ECTST	; Clear S-bit in the emode register
+	MOV	(SP)+, R1
+	MOV	(SP)+, R2
+	MOV	(SP)+, R3
+	RETURN
+;
 	.SBTTL	Timer interrupt handler
 ;===========================================================================
 ;
@@ -1516,6 +1575,7 @@ TMRIRQ:
 ;
 MTADR:	.BLKW	1	; Address of the MACTAB entry
 MACTAB:	.BLKB	84.	; Mac address table
+MACVAL:	.BLKW	4	; Mac temporal storage area
 DATADR:	.BLKW	1	; Data address offset
 DATWCN:	.BLKW	1	; Current data size in words
 DATBCN:	.BLKW	1	; Current data size in bytes
