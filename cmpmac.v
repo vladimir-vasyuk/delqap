@@ -5,7 +5,7 @@
 // Передача данных в модуль возможна только при установленном бите S-пакета
 // Для инициализации:
 //		- установить адоес (запись в BASE);
-//		- записать значение адоеса (BASE+2, BASE+4, BASE+6)
+//		- записать значение адреса (BASE+2, BASE+4, BASE+6)
 //		- цикл на 14 значений.
 // По окончании инициализации установить адрес = 0 !!!
 //=================================================================================
@@ -22,7 +22,7 @@ module cmpmac(
 	input  [1:0]	wb_sel_i,
 	output			wb_ack_o,	// подтверждение выбора устройства
 // Ethernet
-	input	 [2:0]	eth_pms_i,	// режим прослушивания/широковещания/установки
+	input	 [1:0]	eth_pms_i,	// режим прослушивания/установки
 	input				eth_clk_i,	// тактовая частота
 	input				eth_macr_i,	// MAC принят
 	input  [47:0]	eth_macd_i,	// принятый MAC адоес
@@ -35,13 +35,13 @@ reg [47:0]  stdmac[13:0];
 reg [3:0]	adr;
 reg [15:0]	wb_dat;
 reg [15:0]	buf1, buf2;
-reg [7:0]	buf3;
+//reg [7:0]	buf3;
 assign wb_dat_o = wb_dat;
 
 wire			stpac, promisc;
 reg			cmp_res, cmp_done;
 assign stpac = eth_pms_i[0];
-assign promisc = eth_pms_i[2];
+assign promisc = eth_pms_i[1];
 assign cmp_res_o = promisc? 1'b1 : cmp_res;
 assign cmp_done_o = promisc? 1'b1 : cmp_done;
 

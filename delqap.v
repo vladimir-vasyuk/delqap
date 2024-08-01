@@ -165,29 +165,20 @@ dma dmamod(
 
 //*******************************************************************
 // Ethernet модуль
-reg			mcasf;
-reg			promf;
-reg  [2:0]	sanity;
 wire        rxclkb;     // Синхросигнал канала приема (запись в буферную память)
 wire [10:0]	txcntb;		// Счетчик байтов передачи
 wire [10:0] rxcntb;     // Счетчик байтов приема
 wire [9:0]	emode;		// Режим работы модуля Ethernet
 wire [7:0]	estse;		// Статус и ошибки приема/передачи
-wire [15:0]	md_val_i;
-wire [15:0] md_val_o;
-wire [6:0]  md_ctrl;
-wire [7:0]  md_status;
-wire			mac_rdy;		// 
-wire [47:0]	mac_data;	//
-wire			cmp_done;	// 
-wire			cmp_res;		// 
-
-wire ereset;
-ethreset ethrstm(
-   .clk(wb_clkp_i),
-   .rst(wb_rst_i),
-   .e_reset(ereset)
-);
+wire [15:0]	md_val_i;	// Блок MD - данные записи
+wire [15:0] md_val_o;	// Блок MD - данные чтения
+wire [6:0]  md_ctrl;		// Блок MD - сигналы управления
+wire [7:0]  md_status;	// Блок MD - данные состояния
+wire			mac_rdy;		// MAC адрес сформирован
+wire [47:0]	mac_data;	// MAC адрес принятого кадра
+wire			cmp_done;	// Операция сравнения завершена
+wire			cmp_res;		// Результат операции сравнения
+wire [1:0]	epms;			// Режим прослушивания/установки
 
 ether etherm(
    .rst_i(ereset),
@@ -219,11 +210,33 @@ ether etherm(
    .md_val(md_val_o),
    .md_out(md_val_i),
    .md_status(md_status),
+	.prmstp_o(epms),
 	.mac_rdy(mac_rdy),
 	.mac_data(mac_data),
 	.cmp_done(cmp_done),
 	.cmp_res(cmp_res)
 );
+
+//*******************************************************************
+// Формирование сигнала сброса для модуля Ethernet
+wire			ereset;		// Сигнал сброса
+ethreset ethrstm(
+   .clk(wb_clkp_i),
+   .rst(wb_rst_i),
+   .e_reset(ereset)
+);
+
+//*******************************************************************
+// Генерация несущей для блока MD
+wire			md_clock;	// MD clock (T=440ns)
+wire			md_evt;		// MD event (T~1.85sec)
+mdc_clk mclk(
+	.clock(wb_clkp_i),
+	.rst(comb_res),
+	.mdcclk(md_clock),
+	.mdsevt(md_evt)
+);
+assign e_mdc = md_clock;
 
 //*******************************************************************
 // Внутренняя wishbone шина
@@ -279,7 +292,7 @@ wire [15:0]	ltxb_dat;
 wire [15:0]	lcmp_dat;
 
 //*******************************************************************
-// Модуль формирования сбросов 
+// Модуль формирования сбросов  для процессора
 cpu_reset sysreset (
    .clk_i(lwb_clkp),
    .rst_i(comb_res),		// вход сброса
@@ -434,7 +447,6 @@ extregs eregs(
 
 //*******************************************************************
 //* Модуль сравнения MAC адресов
-wire [2:0] epms = {emode[9], emode[8], emode[4]};
 cmpmac cmpm(
 	.wb_clk_i(lwb_clkp),
 	.wb_adr_i(lwb_adr[3:1]),
@@ -453,22 +465,9 @@ cmpmac cmpm(
 	.cmp_res_o(cmp_res)
 );
 
-
-//*******************************************************************
-// Генерация несущей для блока MD
-wire md_clock;
-wire md_evt;
-mdc_clk mclk(
-	.clock(wb_clkp_i),
-	.rst(comb_res),
-	.mdcclk(md_clock),
-	.mdsevt(md_evt)
-);
-assign e_mdc = md_clock;
-
 //************************************************
 // Sanity timer
-wire santm;				// Генерация BDCOK
+wire santm;				// Сигнал BDCOK
 santim santmod(
 	.clock_i(md_clock),
 	.gen_i(santm),

@@ -34,10 +34,11 @@ module ether(
 	output [15:0]	md_out,		// Блок управления - данные чтения
 	output [7:0]	md_status,	// Блок управления - данные состояния
 
-	output			mac_rdy,
-	output [47:0]	mac_data,
-	input				cmp_done,
-	input				cmp_res
+	output [1:0]	prmstp_o,	// Режим прослушивания/установки
+	output			mac_rdy,		// MAC адрес сформирован
+	output [47:0]	mac_data,	// MAC адрес принятого кадра
+	input				cmp_done,	// Операция сравнения завершена
+	input				cmp_res		// Результат операции сравнения
 );
 
 assign e_rst = ~rst_i;
@@ -71,7 +72,7 @@ assign sts_errs_o = {e_crs, rxrdy, txdone, crs_err, mdc_err, tx_errg, rx_errg, r
 //================ Синхронизация ====================//
 wire			loop;				// Сигнал работы петли
 wire			mcast;			// Режим широковещания разрешен
-wire			promis;			// Режим прослушивания разрешен
+//wire [1:0]	prmstp;			// Режим прослушивания разрешен
 wire			rxdonel;			// Сигнал подтверждения приема
 wire			txrdyl;			// Сигнал готовности данных передачи
 wire			rx_enable;		// Разрешение приема
@@ -82,7 +83,7 @@ synchonize synch(
 	.rx_ena_o(rx_enable),
 	.skipb_o(skipb),
 	.mcast_o(mcast),
-	.promis_o(promis),
+	.prmstp_o(prmstp_o),
 	.txrdy_o(txrdyl),
 	.rxdone_o(rxdonel),
 	.loop_o(loop)
@@ -239,7 +240,7 @@ module synchonize(
 	output			txrdy_o,
 	output			rxdone_o,
 	output			mcast_o,
-	output			promis_o,
+	output [1:0]	prmstp_o,
 	output			loop_o
 );
 
@@ -255,7 +256,8 @@ assign setup_o = setup_r[1];
 assign txrdy_o = txrdy_r[1];
 assign rxdone_o = rxdn_r[1];
 assign mcast_o = mcast_r[1];
-assign promis_o = promis_r[1];
+assign prmstp_o[1] = promis_r[1] | inte_loop_o | setup_o | ext_loop_o;
+assign prmstp_o[0] = setup_o;
 assign loop_o = int_loop_o | inte_loop_o | setup_o | ext_loop_o;
 
 always @(posedge clk_i) begin
