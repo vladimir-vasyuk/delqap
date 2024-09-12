@@ -802,13 +802,16 @@ TXSYSM:	MOV	@#ECTST, R0
 TSTMOD:	BIC	#<VR.S3!VR.S2!VR.S1>,@#LQAVAR ; Clear test bits
 	BIS	#1, @#LQABAS	; Block external bus access
 	BIS	#EA.LED,@#EGMOD	; Set indication
-; 2 sec delay
+; 1 sec delay
 	MOVB	TSEC, R0	; Calculate 2 seconds ...
-	ADD	#2, R0		; ... time shift for the ...
+	ADD	#1, R0		; ... time shift for the ...
 	CMP	R0, #60.	; ... delay purpose ...
 	BMI	1$		; ... and store the result ...
 	SUB	#60., R0	; ... in a temporary ...
-1$:	MOVB	R0, STW2	; ... variable
+1$:	CMPB	TSEC, R0
+	BNE	1$
+;
+; Start tests
 	CALL	MBFTST		; Test memory blocks
 	BCS	8$		; If error - br to processing
 	CALL	SACHK		; Test SA ROM checksum
@@ -819,9 +822,6 @@ TSTMOD:	BIC	#<VR.S3!VR.S2!VR.S1>,@#LQAVAR ; Clear test bits
 	BCS	8$		; If error - br to processing
 ;	CALL	MDCINI		; Ethernet transceiver initialization
 ;	BCS	8$
-;
-2$:	CMPB	TSEC, STW2	; Just the delay
-	BNE	2$
 ;
 8$:	MOV	@#EGMOD, R0	; Get EGMOD value
 	BIC	#EA.LED, R0	; Clear led bits
@@ -1245,27 +1245,35 @@ SNDMB:	MOV	R1, -(SP)
 ;
 ECTPR:	MOV	RXBUF+16, R0	; Get skipCount
 	CMP	RXBUF+20(R0),#2	; Function=2?
-	BNE	4$		; No - return
+	BNE	10$		; No - return
 	MOV	#RXBUF, R4	; Initial address to R4
-	MOV	R4, R5		; Copy to R5
-	BIT	#BT.00, (R4)	; Multicast or broadcast frame?
-	BNE	1$		; Yes - br to reply
+	BIT	#ET.PRM,@#EGMOD	; Is promiscuous mode enabled?
+	BEQ	2$		; No - dest.address is correct, continue
+; Check destination address
+	BIT	#BT.00, (R4)	; Multicast or broadcast address?
+	BNE	2$		; Yes - br to reply
+	CLR	R0		; No - check station address
+1$:	CMP	RXBUF(R0),SYSSRC(R0) ; Compare address words
+	BNE	10$		; Not equal - return
+	TST	(R0)+		; +2 to R0
+	CMP	#6, R0		; Compared 6 bytes?
+	BGT	1$		; Not yet - loop
 ;
-1$:	MOV	R5, R4
+2$:	MOV	R4, R5		; Copy to R5
 	ADD	#22, R5		; Shift to the destination MAC address
-	MOV	#3, R0		; Words counter
-2$:	MOV	(R5)+, (R4)+	; Write data to the frame
-	SOB	R0, 2$
-	MOV	#SYSSRC, R5	; Board MAC address
 	MOV	#3, R0		; Words counter
 3$:	MOV	(R5)+, (R4)+	; Write data to the frame
 	SOB	R0, 3$
+	MOV	#SYSSRC, R5	; Board MAC address
+	MOV	#3, R0		; Words counter
+4$:	MOV	(R5)+, (R4)+	; Write data to the frame
+	SOB	R0, 4$
 	TST	(R4)+		; Skip protocol word
 	MOV	#10, (R4)	; Set skipCount=0x0008
 	MOV	#RXBUF, R4	; Initial address to R4
 	MOV	@#ECNTB, R0	; Set frame size (bytes)
 	CALL	SNDMB		; Transmit ECTP
-4$:	RETURN
+10$:	RETURN
 ;
 	.SBTTL	- Process Remote MOP frame (not tested)
 ;===========================================================================
@@ -1469,7 +1477,7 @@ BDCHK:	MOV	R1, -(SP)
 ;
 	.SBTTL	- MAC memory check
 ;===========================================================================
-; MAC memory test (very simple running "1" test)
+; MAC memory test (very simple walking "1" test)
 ;
 MCMTST:	MOV	R3, -(SP)
 	MOV	R2, -(SP)
