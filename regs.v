@@ -371,6 +371,7 @@ always @(posedge lwb_clk_i) begin
 		endcase 
 	end
 end
+
 // Сброс регистров и запись регистров 
 always @(posedge lwb_clk_i) begin
 	// Сброс регистров
@@ -383,7 +384,8 @@ always @(posedge lwb_clk_i) begin
 		// Сброс регистра вектора
 		if(~res_soft) begin	// Не программный сброс
 			var_ms <= s3_n; var_os <= s4_n & s3_n;
-			var_id <= 1'b0; var_iv <= 8'o0; var_rs  <= 1'b1 & s3_n;
+			var_id <= 1'b0; var_iv <= 8'o0;
+			var_rs  <= 1'b1 & s3_n; // тест запускается после нинциализации
 			var_s3 <= 1'b1 & s3_n; var_s2 <= 1'b1 & s3_n; var_s1 <= 1'b1 & s3_n;
 		end
 		else
@@ -410,10 +412,8 @@ always @(posedge lwb_clk_i) begin
 					3'b101:			// Base + 12 - TBDL high
 						if(allow_bus_ops) tbdl_hir[5:0] <= ewb_dat_i[5:0];
 					3'b110: begin	// Base + 14 - VAR
-						if(allow_bus_ops) begin
-							var_id <= ewb_dat_i[0];
-							var_iv[5:0] <= ewb_dat_i[7:2];
-						end
+                  var_id <= ewb_dat_i[0];
+                  var_iv[5:0] <= ewb_dat_i[7:2];
 					end
 					3'b111: begin  // Base + 16 - CSR
 						if(allow_bus_ops) begin
@@ -426,41 +426,38 @@ always @(posedge lwb_clk_i) begin
 							// Только для PDP-11. Для алгоритма смотри доку
 							csr_bd <= ewb_dat_i[3];
 						end
-						csr_sr <= ewb_dat_i[1];  // 1 - 0 => программный сброс
+						if(~blkreg)
+						   csr_sr <= ewb_dat_i[1];  // 1 - 0 => программный сброс
 					end
 				endcase
 			end
-			if(ewb_sel_i[1]) begin    // Запись старшего байта
-				if(allow_bus_ops) begin
-					case (ewb_adr_i[2:0])
-						3'b010: begin  // Base + 04 - RBDL low
-							rbdl_lwr[15:8] <= ewb_dat_i[15:8];
-						end
-						3'b011: begin  // Base + 06 - RBDL high
-							csr_rl <= 1'b0;
-						end
-						3'b100: begin  // Base + 10 - TBDL low
-							tbdl_lwr[15:8] <= ewb_dat_i[15:8];
-						end
-						3'b101: begin  // Base + 12 - TBDL high
-							csr_xl <= 1'b0;
-						end
-						3'b110: begin  // Base + 14 - VAR
-							var_iv[7:6] <= ewb_dat_i[9:8];
-							var_rs <= ewb_dat_i[13] & var_ms;
-							var_ms <= ewb_dat_i[15];
-							if(~ewb_dat_i[15]) begin
-								{var_os,var_rs,var_s3,var_s2,var_s1} <= 5'b0;
-							end
-						end
-						3'b111: begin  // Base + 16 - CSR
-							csr_il <= ewb_dat_i[8];
-							csr_el <= ewb_dat_i[9];
-							csr_se <= ewb_dat_i[10];
-							if(ewb_dat_i[15] == 1'b1) csr_ri <= 1'b0;
-						end
-					endcase
-				end
+			if(ewb_sel_i[1]) begin  // Запись старшего байта
+            case (ewb_adr_i[2:0])
+               3'b010:        // Base + 04 - RBDL low
+                  if(allow_bus_ops) rbdl_lwr[15:8] <= ewb_dat_i[15:8];
+               3'b011:        // Base + 06 - RBDL high
+                  if(allow_bus_ops) csr_rl <= 1'b0;
+               3'b100:        // Base + 10 - TBDL low
+                  if(allow_bus_ops) tbdl_lwr[15:8] <= ewb_dat_i[15:8];
+               3'b101:        // Base + 12 - TBDL high
+                  if(allow_bus_ops) csr_xl <= 1'b0;
+               3'b110: begin  // Base + 14 - VAR
+                  var_iv[7:6] <= ewb_dat_i[9:8];
+                  var_rs <= ewb_dat_i[13] & var_ms;
+                  var_ms <= ewb_dat_i[15];
+                  if(~ewb_dat_i[15]) begin
+                     {var_os,var_rs,var_s3,var_s2,var_s1} <= 5'b0;
+                  end
+               end
+               3'b111: begin  // Base + 16 - CSR
+                  if(allow_bus_ops) begin
+                     csr_il <= ewb_dat_i[8];
+                     csr_el <= ewb_dat_i[9];
+                     csr_se <= ewb_dat_i[10];
+                     if(ewb_dat_i[15] == 1'b1) csr_ri <= 1'b0;
+                  end
+               end
+            endcase
 			end
 		end
 		// Запись регистров внутренняя шина
