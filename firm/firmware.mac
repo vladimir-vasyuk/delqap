@@ -1,10 +1,9 @@
-;
-; For the MOP ops change SETUPB to SETUPW
-; Self test: after power reset MDCINI works incorrectly
-;
+; Find a way to test MEBs
+! XXDP tests still produce lotsa errors
+; Does not work with RSTS!!!
 ;
 	.TITLE	DELQA - DELQA logic
-	.IDENT	/x01.00/
+	.IDENT	/x01.10/
 
 	.SBTTL	Definitions
 
@@ -186,8 +185,6 @@ TS.1AE	= BT.09	; indicates that the transmission was ...
 RS.1GE	= BT.14	; indicates an error
 RS.1ES	= BT.13	; indicates a looped back Setup or ...
 		; ... External Loopback frame
-RS.1DR	= BT.12	; Discard - indicates that OVF (bit 00), ...
-		; ... CRCERR (bit 01), and SHORT (bit 03) are valid
 RS.1RE	= BT.11	; indicates that the internal loopback ...
 		; ... operation was unsuccessful
 RS.1BL	= BT.08!BT.09!BT.10 ; high order 3 bits of ...
@@ -592,7 +589,7 @@ RXP$:
 	BIS	#RS.1GE, R5	; Yes - set error bit
 	BIT	#ER.CRR, R4	; Did we get CRC error?
 	BEQ	16$		; No - continue
-	BIS	#<RS.1DR!RS.1CE>,R5 ; Yes - set error bits
+	BIS	#RS.1CE, R5	; Yes - set error bits
 16$:	BIT	#<ET.STP!ET.IEL!ET.INL!ET.EXL>,R4 ; Loopback packet?
 	BNE	17$		; Yes - br to process loopback
 	SUB	#60., R0	; No - modify byte count ...
@@ -927,60 +924,11 @@ SPACK:	MOV	R1, -(SP)
 ;-----------------------------------------------
 ; Process setup control byte
 ;
-;	MOV	SETUPW, R5	; Get the initial value
-;	BIC	#177000, R5	; Clear high bits
-;	BNE	1$
-;	BR	20$		; Nothing to process, exit
-;1$:	MOV	R5, R4		; Save copy
-;	BIC	#177600, R4	; Clear all excepty control bits
-;	BEQ	10$		; Nothing to process - br to MAC section
-;	MOV	@#EGMOD, R1	; Get ether general register value
-;	BIC	#^C<EA.RXB!EA.TXB!EA.LED>,R1 ; Prepare template register
-;; Promisc. and mcast bits
-;	BIT	#BT.00, R4	; Check Mcast bit
-;	BEQ	2$		; If 0 - br to Promis bit check
-;	BIS	#ET.MCT, R1	; Set Mcast bit in the template
-;2$:	BIT	#BT.01, R4	; Check Promis bit
-;	BEQ	3$		; If 0 - br to led processing
-;	BIS	#ET.PRM, R1	; Set Promis bit in the template
-;; Turn off LED bits
-;3$:
-;	ASH	#-2, R4		; Shift to the right position
-;	BIC	#^C<3>, R4	; Clear all except needed bits
-;	BEQ	4$		; No effect if 0, br to sanity processing
-;	BICB	LEDS(R4), R1	; Turn off correct LED
-;; Set initial sanity timer value
-;4$:	MOV	R5, R4		; Get setup byte value
-;	BIC	#177600, R4	; Clear all except 6-0 bits
-;	ASH	#-3, R4		; Remove unused bits
-;	MOV	SNTIV(R4),SNTVAL ; Store initial value
-;; Sanity timer STM.ENA <= CS.SE
-;	BIT	#CS.SE,@#LQACSR	; Check CSR.SE bit
-;	BNE	5$
-;	BIS	#ST.ENA, R1	; Enable sanity timer
-;; Set register
-;5$:	MOV	R1, @#EGMOD	; Set the result in the register
-;;-----------------------------------------------
-;; Procerss MAC and MOP parts
-;10$:	BIC	#177, R5	; Clear control bits
-;	BEQ	20$		; No MAC info - return
-;;
-;	CALL	ETHTAB		; Process MAC target addresses
-;;
-;	MOV	TXBUF, R0	; Check first byte of the ...
-;	TSTB	R0		; ... setup packet
-;	BEQ	20$		; Zero - no MOP info, return
-;	CALL	MOPPR
-;-----------------------------------------------
-; Return
-;20$:	BCC	21$
-;	BIS	ST.ERR, PRCFLG
-;21$:	MOV	(SP)+, R3
-;	MOV	(SP)+, R2
-;	MOV	(SP)+, R1
-	MOVB	SETUPW, R5	; Get the initial value
-	BIC	#177400, R5	; Clear high bits
+	MOV	SETUPW, R5	; Get the initial value
+	BIC	#177000, R5	; Clear high bits
 	MOV	R5, R4		; Save copy
+	BIC	#177600, R4	; Clear all excepty control bits
+	BEQ	5$		; Nothing to process - br to MAC section
 	MOV	@#EGMOD, R1	; Get ether general register value
 	BIC	#^C<EA.RXB!EA.TXB!EA.LED>,R1 ; Prepare template register
 ; Promisc. and mcast bits
@@ -996,31 +944,34 @@ SPACK:	MOV	R1, -(SP)
 	BIC	#^C<3>, R4	; Clear all except needed bits
 	BEQ	3$		; No effect if 0, br to sanity processing
 	BICB	LEDS(R4), R1	; Turn off correct LED
-;
 ; Set initial sanity timer value
 3$:	MOV	R5, R4		; Get setup byte value
 	BIC	#177600, R4	; Clear all except 6-0 bits
 	ASH	#-3, R4		; Remove unused bits
 	MOV	SNTIV(R4),SNTVAL ; Store initial value
-;
 ; Sanity timer STM.ENA <= CS.SE
 	BIT	#CS.SE,@#LQACSR	; Check CSR.SE bit
-	BEQ	4$		; If 0, no operation
+	BNE	4$
 	BIS	#ST.ENA, R1	; Enable sanity timer
 ; Set register
-4$:	MOV	R1, @#EGMOD	; Nove the result to the register
-
+4$:	MOV	R1, @#EGMOD	; Set the result in the register
 ;-----------------------------------------------
-; Procerss MAC part
-10$:	BIC	#177, R5	; Clear control bits
-	BEQ	20$		; No MAC info - return
+; Procerss MAC and MOP parts
+5$:	BIC	#177, R5	; Clear control bits
+	BEQ	10$		; No MAC info - return
+
 	CALL	ETHTAB		; Process MAC target addresses
+	MOV	TXBUF, R0	; Check first byte of the ...
+	TSTB	R0		; ... setup packet
+	BEQ	10$		; Zero - no MOP info, return
+	CALL	MOPPR
 ;-----------------------------------------------
 ; Return
-20$:	MOV	(SP)+, R3
+	BCC	10$
+	BIS	ST.ERR, PRCFLG
+10$:	MOV	(SP)+, R3
 	MOV	(SP)+, R2
 	MOV	(SP)+, R1
-
 	RETURN
 ;
 	.SBTTL	- Populate ethernet filter table
@@ -1776,7 +1727,6 @@ MEBSIZ:	.BLKW	1	; Szie in bytes
 TTICK:	.BYTE	0	; Ticks
 TSEC:	.BYTE	0	; Seconds
 TMIN:	.BYTE	0	; Minutes
-;TSYSM:	.BYTE	0	; System message timeout
 ;TCNT	= .-TTICK
 	.EVEN
 ;-----------------------------------------------
