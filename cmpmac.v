@@ -2,7 +2,8 @@
 // Реализация контроллера Ethernet DELQA на основе процессора М4 (LSI-11M)
 //=================================================================================
 // Модуль сравнения MAC адреса принятого пакета со списокм разоешенных адресов
-// Передача данных в модуль возможна только при установленном бите S-пакета
+// Чтение/запись данных в модуль возможна только при установленном бите S (признак
+// передачи setup пакета).
 // Для инициализации:
 //		- установить адоес (запись в BASE);
 //		- записать значение адреса (BASE+2, BASE+4, BASE+6)
@@ -24,33 +25,34 @@ module cmpmac(
 // Ethernet
 	input	 [1:0]	eth_pms_i,	// режим прослушивания/установки
 	input				eth_clk_i,	// тактовая частота
-	input				eth_macr_i,	// MAC принят
-	input  [47:0]	eth_macd_i,	// принятый MAC адоес
+	input				eth_macr_i,	// сигнал готовности MAC адреса
+	input  [47:0]	eth_macd_i,	// значение принятого MAC адреса
 	output			cmp_done_o,	// сигнал "операция сравнения завершена"
 	output			cmp_res_o	// результат сравнения
 );
 
 // Массив разрешенных адресов
-reg [47:0]  stdmac[13:0];
-reg [3:0]	adr;
-reg [15:0]	wb_dat;
-reg [15:0]	buf1, buf2;
-//reg [7:0]	buf3;
+reg [15:0]  stdmacl[0:13];    // 2 младших байта
+reg [15:0]  stdmacm[0:13];    // 2 средних байта
+reg [15:0]  stdmach[0:13];    // 2 старших байта
+reg [3:0]	adr;              // регистр адреса
+reg [15:0]	wb_dat;           // данные
 assign wb_dat_o = wb_dat;
 
 wire			stpac, promisc;
 reg			cmp_res, cmp_done;
 assign stpac = eth_pms_i[0];
-assign promisc = eth_pms_i[1];
+assign promisc = eth_pms_i[1] | eth_pms_i[0];
 assign cmp_res_o = promisc? 1'b1 : cmp_res;
 assign cmp_done_o = promisc? 1'b1 : cmp_done;
 
-// Сигналы упраления обменом с шиной
+// Сигналы упраления обменом по шине
 wire			bus_strobe, bus_write_req, bus_read_req;
 assign bus_strobe = wb_cyc_i & wb_stb_i & ~wb_ack_o & stpac;	// строб цикла шины
 assign bus_read_req = bus_strobe & ~wb_we_i;							// запрос чтения
 assign bus_write_req = bus_strobe & wb_we_i;							// запрос записи
 
+// Формирование сигнала подтверждения
 reg  [1:0]	ack;
 always @(posedge wb_clk_i) begin
 	ack[0] <= wb_cyc_i & wb_stb_i;
@@ -58,17 +60,7 @@ always @(posedge wb_clk_i) begin
 end
 assign wb_ack_o = wb_cyc_i & wb_stb_i & ack[1];
 
-// Инициализация массива адресов
-genvar i;
-generate
-for (i = 0; i < 14; i = i + 1)
-begin : reg_init
-    initial
-        stdmac[i] = 48'b0;
-end
-endgenerate
-
-wire clock;				// Тактовая
+wire clock;				// Общая тактовая
 assign clock = stpac? wb_clk_i : eth_clk_i;
 
 always @(posedge clock, posedge rst_i)  begin
@@ -81,11 +73,11 @@ always @(posedge clock, posedge rst_i)  begin
 			3'b000: // 24120
 				wb_dat <= {12'b0, adr};
 			3'b001: // 24122
-				wb_dat <= stdmac[adr][15:0];
+				wb_dat <= stdmacl[adr];
 			3'b010: // 24124
-				wb_dat <= stdmac[adr][31:16];
+				wb_dat <= stdmacm[adr];
 			3'b011: // 24126
-				wb_dat <= stdmac[adr][47:32];
+				wb_dat <= stdmach[adr];
 		endcase
 	end
 	else if(bus_write_req) begin
@@ -94,20 +86,20 @@ always @(posedge clock, posedge rst_i)  begin
 				3'b000: // 24120
 					adr <= wb_dat_i[3:0];
 				3'b001: // 24122
-					buf1[15:0] <= wb_dat_i[15:0];
+					stdmacl[adr] <= wb_dat_i;
 				3'b010: // 24124
-					buf2[15:0] <= wb_dat_i[15:0];
+					stdmacm[adr] <= wb_dat_i;
 				3'b011: // 24126
-					stdmac[adr] <= {wb_dat_i[15:0], buf2, buf1};
+					stdmach[adr] <= wb_dat_i;
 			endcase
 		end
 	end
 	else begin
 		if(eth_macr_i) begin
 			if((adr <= 4'd13) & (cmp_done == 1'b0)) begin
-				if(eth_macd_i == stdmac[adr]) begin
-					cmp_res <= 1'b1;
-					cmp_done <= 1'b1;
+            if((eth_macd_i[15:0] == stdmacl[adr]) && (eth_macd_i[31:16] == stdmacm[adr]) &&
+               (eth_macd_i[47:32] == stdmach[adr])) begin
+					cmp_res <= 1'b1; cmp_done <= 1'b1;
 				end
 				adr <= adr + 1'b1;
 			end
