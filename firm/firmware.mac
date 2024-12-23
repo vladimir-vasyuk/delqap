@@ -112,7 +112,6 @@ EMAC1	= 24122     ; Low section bits
 EMAC2	= 24124     ; Middle section bits
 EMAC3	= 24126     ; High section bits
 ;
-	.END	0
 
 .SBTTL	- Bit definitions
 ;===========================================================================
