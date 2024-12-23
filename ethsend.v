@@ -23,7 +23,6 @@ module ethsend(
 reg         txer;
 assign err_gen = txer;
 
-
 reg  [10:0] i;				// Внутренний счетчик
 reg  [15:0] bufdat;		// Буфер данных передачи
 reg  [1:0]  bc;			// Счетчик байтов
@@ -113,25 +112,6 @@ always@(negedge clk, posedge clr) begin
          end
 			SENDCRC: begin		// Передача контрольной сумм (CRC)
 				crcen <= 1'b0;
-/*
-				if(bc == 2'o0)	begin
-					dataout[7:0] <= {~crc[24], ~crc[25], ~crc[26], ~crc[27], ~crc[28], ~crc[29], ~crc[30], ~crc[31]};
-					bc <= bc + 1'b1;
-				end
-				else if(bc == 2'o1) begin
-					dataout[7:0] <= {~crc[16], ~crc[17], ~crc[18], ~crc[19], ~crc[20], ~crc[21], ~crc[22], ~crc[23]};
-					bc <= bc + 1'b1;
-				end
-				else if(bc == 2'o2) begin
-					dataout[7:0] <= {~crc[8], ~crc[9], ~crc[10], ~crc[11], ~crc[12], ~crc[13], ~crc[14], ~crc[15]};
-					bc <= bc + 1'b1;
-				end
-				else if(bc == 2'o3) begin
-					dataout[7:0] <= {~crc[0], ~crc[1], ~crc[2], ~crc[3], ~crc[4], ~crc[5], ~crc[6], ~crc[7]};
-					bc <= bc + 1'b1;
-					tx_state <= TXDELAY;
-				end
-*/
 				case(bc)
 					2'o0: begin
 						dataout[7:0] <= {~crc[24], ~crc[25], ~crc[26], ~crc[27], ~crc[28], ~crc[29], ~crc[30], ~crc[31]};
