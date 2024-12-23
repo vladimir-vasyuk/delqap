@@ -25,7 +25,8 @@ module ethreceive(
 	output [47:0]		mac_data,
 	output				mac_rdy,
 	input					cmp_done,
-	input					cmp_res
+	input					cmp_res,
+   output [1:0]      sfrtyp
 );
 
 reg  [2:0]	ic;				// Счетчик
@@ -34,11 +35,13 @@ reg  [47:0]	recmac;			// Принятый MAC адрес
 reg  [7:0]	bufdat;			// Буфер принятых данных
 reg			rx_gen_error;	// Сигнал общей ошибки
 reg			rx_crc_error;	// Сигнал ошибки CRC
-reg  [5:0]	sigwait;				// таймер ожидания
+reg  [5:0]	sigwait;       // таймер ожидания
+reg  [1:0]  spfrtyp;
 
 assign {err_gen, err_crc} = {rx_gen_error, rx_crc_error};
 assign mac_data = recmac;
 assign mac_rdy = ic[2] & ic[1] & ~ic[0];
+assign sfrtyp = spfrtyp;
 
 // Конечный автомат канала приема
 localparam IDLE		= 3'd0;
@@ -202,6 +205,21 @@ always@(negedge clk, posedge clr) begin
 			default: rx_state <= IDLE;
 		endcase
 	end
+end
+
+// Обнаружение спец. кадров
+always@(negedge clk) begin
+   case(rx_state)
+      IDLE: spfrtyp <= 2'b0;
+      RX_DATA: begin
+         if(rxbaddr == 10'o6) begin
+            case(rxbdata)
+               16'o0220: spfrtyp <= 2'b01;   // ECTP frame
+               16'o1140: spfrtyp <= 2'b10;   // MOP frame
+            endcase
+         end
+      end
+   endcase
 end
 
 endmodule

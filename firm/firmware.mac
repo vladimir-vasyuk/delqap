@@ -1,5 +1,5 @@
 ; Find a way to test MEBs
-! XXDP tests still produce lotsa errors
+; XXDP tests still produce lotsa errors
 ; Does not work with RSTS!!!
 ;
 	.TITLE	DELQA - DELQA logic
@@ -101,7 +101,7 @@ EMDCTR	= 24046     ; Ethernet MD control/status
 ;  4:0  : reg. address
 ;--------------
 EGMOD	= 24050
-; read  - {bdmode, 6'b0, rbt_ena, stm_ena, promis, mcast, rxa_eth, txa_eth, led, led, led}
+; read  - {bdmode, sfttyp, sfttyp, 4'b0, rbt_ena, stm_ena, promis, mcast, rxa_eth, txa_eth, led, led, led}
 ; write - {6'b0, santm_reset, 1'b0, stm_ena, promis, mcast, rxa_eth, txa_eth, led, led, led}
 ;--------------
 ESADR	= 24060     ; +3 - station address + checksum. RO
@@ -112,6 +112,7 @@ EMAC1	= 24122     ; Low section bits
 EMAC2	= 24124     ; Middle section bits
 EMAC3	= 24126     ; High section bits
 ;
+	.END	0
 
 .SBTTL	- Bit definitions
 ;===========================================================================
@@ -236,6 +237,8 @@ ER.RER	= ER.CR!ER.RDR!ER.CRR
 ;---------------------------------------------------------------------------
 ; Bits defined for EGMOD
 BD.ROM	= BT.15	; Load BDROM
+FR.MOP	= BT.14	; MOP frame
+FR.ECT	= BT.13	; ECT frame
 ST.RST	= BT.09	; Sanity timer reset
 RB.ENA	= BT.08	; Remote boot enable
 ST.ENA	= BT.07	; Sanity timer enable
@@ -527,27 +530,40 @@ TXL$:	MOV	BDLL, 6(R2)	; Set to DMA address (low order bits)
 RXP:
 ;
 ; We've got a frame, lets look what to do with it...
-;	MOV	@#ECTST, RECTST	; Get ethernet status
-	BIC	#EA.RXB,@#EGMOD	; Set bus mode for RXBUF
-	MOV	RXBUF+14, R0
-	CMP	#220, R0	; ECTP (proto=0x9000)?
-	BNE	1$		; No - continue
-	CALL	ECTPR		; Call ECTP reply
-	BR	4$		; Br to finish
+;	BIC	#EA.RXB,@#EGMOD	; Set bus mode for RXBUF
+;	MOV	RXBUF+14, R0
+;	CMP	#220, R0	; ECTP (proto=0x9000)?
+;	BNE	1$		; No - continue
+;	CALL	ECTPR		; Call ECTP reply
+;	BR	4$		; Br to finish
+;;
+;1$:	CMP	#1140, R0	; DEC MOP (proto=0x6002)?
+;	BNE	2$
+;	CALL	MOPR
+;	BCC	4$
+;;
+;2$:	BIT	#CS.RL, @R3	; Check RL-bit
+;	BEQ	10$		; RL=1 - abort processing
 ;
-1$:	CMP	#1140, R0	; DEC MOP (proto=0x6002)?
-	BNE	2$
-	CALL	MOPR
-	BCC	4$
+;4$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF, ...
+;	BIS	#ET.RDD,@#ECTST	; ... set "receive-done" bit ...
+;	RETURN			; ... and return
+;;
+;10$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
 ;
-2$:	BIT	#CS.RL, @R3	; Check RL-bit
-	BEQ	10$		; RL=1 - abort processing
-
-4$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF, ...
-	BIS	#ET.RDD,@#ECTST	; ... set "receive-done" bit ...
+	MOV	@#EGMOD, R0	; Get EGMOD value
+	BIT	#<FR.MOP!FR.ECT>,R0 ; Got one of the special frame?
+	BEQ	10$		; No - br to process normal frame
+	BIT	#FR.ECT, R0	; Yes - is it ECTP frame?
+	BEQ	6$		; No - br to return
+	CALL	ECTPR		; ECTP reply
+	BR	8$		; Br to finish
+6$:	CALL	MOPR		; MOP frame processing
+8$:	BIS	#ET.RDD,@#ECTST ; Set "receive-done" bit ...
 	RETURN			; ... and return
-;
-10$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
+
+10$:	BIT	#CS.RL, @R3	; Check RL-bit
+	BNE	8$		; RL=1 - abort processing
 ;-----------------------------------------------
 ; Packet processing starts here
 RXP$:
@@ -1246,7 +1262,8 @@ SNDMB:	MOV	R1, -(SP)
 ;===========================================================================
 ; Send Ethernet-Configuration-Testing-Protocol reply frame.
 ;
-ECTPR:	MOV	RXBUF+16, R0	; Get skipCount
+ECTPR:	BIC	#EA.RXB,@#EGMOD	; Set bus mode for RXBUF
+	MOV	RXBUF+16, R0	; Get skipCount
 	CMP	RXBUF+20(R0),#2	; Function=2?
 	BNE	10$		; No - return
 	MOV	#RXBUF, R4	; Initial address to R4
@@ -1276,12 +1293,14 @@ ECTPR:	MOV	RXBUF+16, R0	; Get skipCount
 	MOV	#RXBUF, R4	; Initial address to R4
 	MOV	@#ECNTB, R0	; Set frame size (bytes)
 	CALL	SNDMB		; Transmit ECTP
-10$:	RETURN
+10$:	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
+	RETURN
 ;
 	.SBTTL	- Process Remote MOP frame (not tested)
 ;===========================================================================
 ; Process "Request ID" and "Boot ID" messages
-MOPR:	MOV	RXBUF+20, R0	; Get code
+MOPR:	BIC	#EA.RXB,@#EGMOD	; Set bus mode for RXBUF
+	MOV	RXBUF+20, R0	; Get code
 ;
 ; Check for the Request ID message code
 	CMPB	#MOPRSM, R0	; Request ID?
@@ -1319,6 +1338,7 @@ MOPR:	MOV	RXBUF+20, R0	; Get code
 8$:	BIS	#ST.RST,@#EGMOD ; Generate BDCOK (reboot host)
 9$:	TST	(PC)+
 10$:	SEC
+	BIS	#EA.RXB,@#EGMOD	; Restore ethernet mode for RXBUF
 	RETURN
 ;
 	.SBTTL	- Check verification code (not tested)
@@ -1591,7 +1611,6 @@ DATBCN:	.BLKW	1	; Current data size in bytes
 BCOUNT:	.BLKW	1	; Total data size in bytes
 WCOUNT:	.BLKW	1	; DMA ops. data size (2's compl.)
 RBCNT:	.BLKW	1	; Byte count copy
-;RECTST:	.BLKW	1	; Ether status copy
 RBDLL:	.BLKW	1	; Receive op BDL low address bits
 RBDLH:	.BLKW	1	; Receve op BDL high address bits
 BDLL:	.BLKW	1	; BDL low address bits

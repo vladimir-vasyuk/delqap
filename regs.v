@@ -35,7 +35,7 @@ module extregs(
 // Ethernet
    input          let_stb_i,  // строб выбора регистров ethernet
    output [9:0]   e_mode_o,   // управляющие сигналы для модуля ethernet
-   input  [7:0]   e_stse_i,   // состояние модуля ethernet
+   input  [9:0]   e_stse_i,   // состояние модуля ethernet
    output [10:0]  e_txcntb_o, // кол-во байт канала передачи
    input  [10:0]  e_rxcntb_i, // кол-во байт канала приема
    output [15:0]  e_mdval_o,  // данные для блока MDC
@@ -502,7 +502,7 @@ always @(posedge lwb_clk_i) begin
          4'b0011:   // 24046
             etdat <= {e_mdstat_i[7:0], 1'b0, e_mdctrl[6:0]};
          4'b0100:   // 24050
-            etdat <= {bdrom, 6'b0, rbt_enav, stm_enav, promis, mcast, eadr_mod[1:0], leds[2:0]};
+            etdat <= {bdrom, e_stse_i[9:8], 4'b0, rbt_enav, stm_enav, promis, mcast, eadr_mod[1:0], leds[2:0]};
 //         4'b0110:   // 24054
 //         4'b0111:   // 24056
          4'b1000:

@@ -13,7 +13,7 @@ module ether(
 	output [10:0]	rxcntb_o,	// Счетчик данных приема (байт)
 	output			erxwrn_o,	// Сигнал записи
 	output			rxclkb_o,	// Синхросигнал канала приема (запись в буферную память)
-	output [7:0]	sts_errs_o,	// статус и ошибки приема/передачи
+	output [9:0]	sts_errs_o,	// статус и ошибки приема/передачи
 
 	input				e_rxc,		// Синхросигнал канала приема
 	input				e_rxdv,		// Сигнал готовности данных канала приема
@@ -67,7 +67,7 @@ wire			rxrdy;		// Данные приняты
 wire			txdone;		// Передача завершена 
 assign crs_err = (e_rxer & (~e_rxdv))? 1'b1 : 1'b0;
 assign rx_errg = loop? rx_err : (rx_err | ~md_status[0] | ~md_status[1]);
-assign sts_errs_o = {e_crs, rxrdy, txdone, crs_err, mdc_err, tx_errg, rx_errg, rx_crc_err};
+assign sts_errs_o = {sfrtyp, e_crs, rxrdy, txdone, crs_err, mdc_err, tx_errg, rx_errg, rx_crc_err};
 
 //================ Синхронизация ====================//
 wire			loop;				// Сигнал работы петли
@@ -166,6 +166,7 @@ wire [7:0]	rxdbl;			// Шина данных канала приема с уче
 wire			rxclkl;			// Синхросигнал канала приема с учетом петли
 wire			rxdvl;			// Сигнал готовности данных блока приема с учетом петли
 wire			rxerl;			// Сигнал ошибки данных канала приема с учетом петли
+wire [1:0]  sfrtyp;
 
 assign rxdbl = loop? txdb : rxdb;
 assign rxdvl = loop? txens : rxdv;
@@ -195,7 +196,8 @@ ethreceive ethrcvm(
 	.mac_data(mac_data),
 	.mac_rdy(mac_rdy),
 	.cmp_done(cmp_done),
-	.cmp_res(cmp_res)
+	.cmp_res(cmp_res),
+   .sfrtyp(sfrtyp)
 );
 
 //==== Контрольная сумма данных канала передачи ====//
@@ -258,7 +260,8 @@ assign rxdone_o = rxdn_r[1];
 assign mcast_o = mcast_r[1];
 assign prmstp_o[1] = promis_r[1] | inte_loop_o | setup_o | ext_loop_o;
 assign prmstp_o[0] = setup_o;
-assign loop_o = int_loop_o | inte_loop_o | setup_o | ext_loop_o;
+//assign loop_o = int_loop_o | inte_loop_o | setup_o | ext_loop_o;
+assign loop_o = int_loop_o | inte_loop_o | setup_o;
 
 always @(posedge clk_i) begin
 	rx_ena_r[0] <= ethmode_i[0]; rx_ena_r[1] <= rx_ena_r[0];
