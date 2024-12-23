@@ -37,8 +37,8 @@ reg  [3:0]	dma_op;			// регистры операции                       
 reg  [15:0]	dma_wcount;		// кол-во слов передачи                     -- 24022
 reg  [15:1]	dma_lad;			// локальный адрес памяти                   -- 24024
 reg  [21:1]	dma_haddr;		// физический адрес памяти                  -- 24026/24030 (low/high)
-reg  [5:0]	ibus_wait;		// таймер ожидания ответа при DMA-обмене    -- 24032
-reg  [5:0]	bus_wait;		// текущее знвчение таймера ожидания
+reg  [7:0]	ibus_wait;		// таймер ожидания ответа при DMA-обмене    -- 24032
+reg  [7:0]	bus_wait;		// текущее знвчение таймера ожидания
 reg  [15:0] data_index;		// указатель текущего слова
 reg			nxm;				// признак таймаута шины
 reg			iocomplete;		// признак завершения работы DMA-контроллера
@@ -100,7 +100,7 @@ always @(posedge clk_i, posedge rst_i)  begin
       dma_lad <= 15'b0;
 		dma_wcount <= 16'hFFFF;
 		dma_op <= 4'b0;
-		ibus_wait<= 6'b111111;
+		ibus_wait<= 8'b11111111;
    end
 
    // рабочие состояния
@@ -119,7 +119,7 @@ always @(posedge clk_i, posedge rst_i)  begin
 				3'b100:	//24030
 					wb_dat <= {10'b0, dma_haddr[21:16]};
 				3'b101:	//24032
-					wb_dat <= {10'b0, ibus_wait[5:0]};
+					wb_dat <= {8'b0, ibus_wait[7:0]};
 			endcase
 		end
 		else if (bus_write_req == 1'b1) begin
@@ -136,7 +136,7 @@ always @(posedge clk_i, posedge rst_i)  begin
 					3'b100:	//24030
 						dma_haddr[21:16] <= wb_dat_i[5:0];
 					3'b101:	//24032
-						ibus_wait <= wb_dat_i[5:0];
+						ibus_wait <= wb_dat_i[7:0];
 				endcase
 			end
 			if (wb_sel_i[1] == 1'b1) begin    // Запись старшего байта
